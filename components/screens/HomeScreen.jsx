@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -8,8 +9,20 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Search, Bell, ScanLine } from "lucide-react-native";
+import { auth } from "../../firebase";
 
 export default function HomeScreen({ navigation }) {
+  const [ firstName, setFirstName] = useState('')
+  useEffect(()=>{
+    const user = auth.currentUser;
+
+    if ( user?.displayName){
+      const first = user.displayName.split(' ')[0];
+      setFirstName(first);
+    }
+  }, []);
+
+
   const recentShipments = [
     {
       id: "1234890",
@@ -43,7 +56,7 @@ export default function HomeScreen({ navigation }) {
                 className="w-14 h-14 rounded-full mr-3"
               />
               <Text className="text-white text-lg font-medium">
-                Welcome, Tayo
+                Welcome, {firstName}!
               </Text>
             </View>
             <TouchableOpacity className="relative p-3 rounded-full bg-white">

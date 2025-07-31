@@ -104,21 +104,39 @@ export default function Splash() {
   const logoOpacity = useRef(new Animated.Value(0)).current;
   const [appReady, setAppReady] = useState(false);
 
+  // const startApp = async () => {
+  //   const seenIntro = await AsyncStorage.getItem('hasSeenIntro');
+  //   const rememberMe = await AsyncStorage.getItem('rememberMe');
+
+  //   SplashScreen.hideAsync(); // Hide native splash only now
+
+  //   if (!seenIntro) {
+  //     navigation.replace('Welcome');
+  //   } else if (rememberMe === 'true') {
+  //     navigation.replace('MainApp');
+  //   } else {
+  //     navigation.replace('Register');
+  //   }
+  // };
+
+
   const startApp = async () => {
     const seenIntro = await AsyncStorage.getItem('hasSeenIntro');
     const rememberMe = await AsyncStorage.getItem('rememberMe');
-
+    const userLoggedIn = await AsyncStorage.getItem('userLoggedIn');
+  
     SplashScreen.hideAsync(); // Hide native splash only now
-
+  
     if (!seenIntro) {
       navigation.replace('Welcome');
+    } else if (userLoggedIn === 'true') {
+      navigation.replace('MainApp');
     } else if (rememberMe === 'true') {
       navigation.replace('MainApp');
     } else {
-      navigation.replace('Register');
+      navigation.replace('Login');
     }
   };
-
   const onAnimationComplete = () => {
     // Fade in logo
     Animated.timing(logoOpacity, {

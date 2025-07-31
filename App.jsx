@@ -1,17 +1,28 @@
 // Rapid Delivery's App Core Imports
-import React from "react";
+import React, { useEffect, useState } from 'react';
 import { NavigationContainer } from "@react-navigation/native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { StatusBar } from "expo-status-bar";
 import { enableScreens } from "react-native-screens";
 import { Home, MapPin, User, Bus, Settings } from "lucide-react-native";
+import Toast from "react-native-toast-message";
+import { auth } from "./firebase";
+import { onAuthStateChanged } from "firebase/auth";
+
 
 // Rapid Delivery's Core Screens
 import HomeScreen from "./components/screens/HomeScreen";
 import LocationScreen from "./components/screens/LocationScreen";
 import ProfileScreen from "./components/screens/ProfileScreen";
 import PackageDetailsScreen from "./components/screens/PackageDetailsScreen";
+
+
+// Toast Configuration & Loading Configuration
+import toastConfig from "./config/toastConfig";
+import { LoadingProvider } from "./context/LoadingContext";
+import LoadingOverlay from "./components/LoadingOverlay";
+
 
 // Rapid Delivery's Onboarding Screens
 import Splash from "./components/onboarding/Splash";
@@ -27,6 +38,7 @@ enableScreens();
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
+
 
 // Stack Options Constant
 const stackScreenOptions = {
@@ -123,20 +135,46 @@ function TabNavigator() {
 }
 
 export default function App() {
+  const [initializing, setInitializing] = useState(true);
+  const [user, setUser] = useState(null);
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+      setUser(firebaseUser);
+      setInitializing(false); // Firebase has finished checking
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  if (initializing) return null;
   return (
-    <NavigationContainer>
-      <StatusBar style="light" />
-      <Stack.Navigator
-        screenOptions={{ headerShown: false }}
-        initialRouteName="Splash"
-      >
-        <Stack.Screen name="Splash" component={Splash} />
-        <Stack.Screen name="Welcome" component={WelcomeScreen} />
-        <Stack.Screen name="Onboarding" component={OnboardingSlides} />
-        <Stack.Screen name="Register" component={RegistrationScreen} />
-        <Stack.Screen name="Login" component={LoginScreen} />
-        <Stack.Screen name="MainApp" component={TabNavigator} />
-      </Stack.Navigator>
-    </NavigationContainer>
+    <LoadingProvider>
+      <NavigationContainer>
+        <StatusBar style="light" />
+        <Stack.Navigator
+          screenOptions={{ headerShown: false }}
+          initialRouteName="Splash"
+        >
+          <Stack.Screen name="Splash" component={Splash} />
+          <Stack.Screen name="Welcome" component={WelcomeScreen} />
+          <Stack.Screen name="Onboarding" component={OnboardingSlides} />
+          <Stack.Screen name="Register" component={RegistrationScreen} />
+          <Stack.Screen name="Login" component={LoginScreen} />
+          <Stack.Screen name="MainApp" component={TabNavigator} />
+        </Stack.Navigator>
+
+      </NavigationContainer>
+      <LoadingOverlay/>
+        <Toast
+          config={toastConfig}
+          position="top" // or "bottom"
+          autoHide
+          visibilityTime={4000} // 4 seconds
+          topOffset={60}
+          bottomOffset={60}
+          swipeable={true}
+        />
+    </LoadingProvider>
   );
 }

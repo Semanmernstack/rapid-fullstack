@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import { View, Text, TouchableOpacity, ScrollView, Image } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
@@ -9,8 +10,65 @@ import {
   LogOut,
   ChevronRight,
 } from "lucide-react-native";
+import { auth } from "../../firebase";
+import { useLoading } from "../../context/LoadingContext";
+import Toast from "react-native-toast-message";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export default function ProfileScreen({ navigation }) {
+
+  const [ userName, setUserName] = useState('')
+  const [ userEmail, setUserEmail] = useState('')
+  const { showLoading, hideLoading } = useLoading();
+
+  const handleLogout = async () => {
+    showLoading("Signing you out...");
+    try {
+      await auth.signOut();
+      // await AsyncStorage.removeItem('userLoggedIn');
+    await AsyncStorage.setItem('userLoggedIn', 'false');
+      Toast.show({
+        type: 'success',
+        text1: 'Signed out successfully',
+      });
+      // navigation.replace("Login");
+      navigation.reset({
+        index: 0,
+        routes: [{ name: "Login" }], // or "Welcome" or "AuthStack" depending on your flow
+      });
+  
+    } catch (error) {
+      console.error("Error signing out:", error);
+      Toast.show({
+        type: 'danger',
+        text1: 'Logout Failed',
+        text2: error.message,
+      });
+    } finally {
+      hideLoading();
+    }
+  };
+
+  // Display Name
+  useEffect(()=>{
+    const user = auth.currentUser;
+
+    if ( user?.displayName){
+      const username = user.displayName;
+      setUserName(username);
+    }
+  }, []);
+
+  // Email
+  useEffect(()=>{
+    const userEmail = auth.currentUser;
+
+    if ( userEmail?.email){
+      const Email = userEmail.email;
+      setUserEmail(Email);
+    }
+  }, []);
+
   return (
     <SafeAreaView className="flex-1 bg-white">
       {/* Header */}
@@ -44,8 +102,8 @@ export default function ProfileScreen({ navigation }) {
           </View>
           {/* User Name and Email */}
           <View className="absolute -bottom-6 right-40">
-            <Text className="text-xl font-bold text-gray-100">Taiwo Adams</Text>
-            <Text className="text-gray-50 mb-6">Taiwo123@gmail.com</Text>
+            <Text className="text-xl font-bold text-gray-100">{userName}</Text>
+            <Text className="text-gray-50 mb-6">{userEmail}</Text>
           </View>
 
           <TouchableOpacity className="absolute bottom-1 right-2 w-7 h-7 bg-white rounded-md items-center justify-center shadow-md">
@@ -105,7 +163,7 @@ export default function ProfileScreen({ navigation }) {
               </Text>
             </TouchableOpacity>
 
-            <TouchableOpacity className="flex-row items-center py-4">
+            <TouchableOpacity onPress={handleLogout} className="flex-row items-center py-4">
               <View className="w-10 h-10 bg-red-100 rounded-full items-center justify-center mr-4">
                 <LogOut size={20} color="#9D1F00" />
               </View>
