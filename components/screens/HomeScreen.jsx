@@ -9,20 +9,34 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Search, Bell, ScanLine } from "lucide-react-native";
-import { auth } from "../../firebase";
+import { subscribeToProfileUpdates } from "../../utils/userProfileUtils";
 
 export default function HomeScreen({ navigation }) {
-  const [ firstName, setFirstName] = useState('')
-  useEffect(()=>{
-    const user = auth.currentUser;
+  // Initializing User Data 
+  const [userProfile, setUserProfile] = useState({
+    firstName: '',
+    photoURL: null
+  });
 
-    if ( user?.displayName){
-      const first = user.displayName.split(' ')[0];
-      setFirstName(first);
-    }
+
+  // Grabbing User information
+  useEffect(() => {
+    const unsubscribe = subscribeToProfileUpdates((profile) => {
+      if (profile) {
+        setUserProfile({
+          firstName: profile.firstName,
+          photoURL: profile.photoURL
+        });
+      }
+    });
+
+    // Cleanup subscription on unmount
+    return () => unsubscribe();
   }, []);
 
 
+
+  // Dummy Shipment data
   const recentShipments = [
     {
       id: "1234890",
@@ -52,11 +66,15 @@ export default function HomeScreen({ navigation }) {
           <View className="flex-row items-center justify-between px-6">
             <View className="flex-row items-center">
               <Image
-                source={require("../../assets/images/avatar.png")}
+                source={
+                  userProfile.photoURL
+                    ? { uri: userProfile.photoURL }
+                    : require("../../assets/images/avatar.png")
+                }
                 className="w-14 h-14 rounded-full mr-3"
               />
               <Text className="text-white text-lg font-medium">
-                Welcome, {firstName}!
+                Welcome, {userProfile.firstName}!
               </Text>
             </View>
             <TouchableOpacity className="relative p-3 rounded-full bg-white">
@@ -66,10 +84,8 @@ export default function HomeScreen({ navigation }) {
               </View>
             </TouchableOpacity>
           </View>
-
-          {/* Track Package Section */}
-         
         </SafeAreaView>
+          {/* Track Package Section */}
       <ScrollView className="flex-1">
         {/* Header */}
         <View className="px-6 my-6">

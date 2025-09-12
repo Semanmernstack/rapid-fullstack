@@ -26,12 +26,10 @@
 // export { auth };
 
 
-// firebase.js
-
-// firebase/config.js - IMPROVED VERSION
 import { initializeApp, getApps } from "firebase/app";
-import { initializeAuth, getReactNativePersistence } from "firebase/auth";
+import { initializeAuth, getReactNativePersistence, getAuth } from "firebase/auth";
 import ReactNativeAsyncStorage from "@react-native-async-storage/async-storage";
+import { getFirestore } from "firebase/firestore";
 
 // Firebase config
 const firebaseConfig = {
@@ -46,6 +44,7 @@ const firebaseConfig = {
 
 // Initialize Firebase app (only once)
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
+const firestore = getFirestore(app);
 
 // Initialize Auth with AsyncStorage persistence (only once)
 const auth = initializeAuth(app, {
@@ -54,4 +53,4 @@ const auth = initializeAuth(app, {
 
 console.log("🔥 Firebase Auth initialized with AsyncStorage persistence");
 
-export { auth };
+export { auth, app, firestore };

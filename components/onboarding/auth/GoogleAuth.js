@@ -27,22 +27,19 @@ export function useGoogleAuth(onSuccess, onError) {
   useEffect(() => {
     if (response?.type === "success") {
       const { idToken, accessToken } = response.authentication || {};
-  
+
       if (!idToken) {
         console.error("❌ Google Auth: Missing idToken");
         onError(new Error("Missing ID token from Google authentication"));
         return;
       }
-  
+
       const credential = GoogleAuthProvider.credential(idToken, accessToken);
-  
-      signInWithCredential(auth, credential)
-        .then(onSuccess)
-        .catch(onError);
+
+      signInWithCredential(auth, credential).then(onSuccess).catch(onError);
     }
     console.log("Google Auth response:", response);
   }, [response]);
-  
 
   return { request, promptAsync };
 }
