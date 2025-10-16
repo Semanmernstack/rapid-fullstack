@@ -36,12 +36,13 @@ import {
   deleteSavedInfo,
   updateSavedInfo,
 } from "../../utils/savedInfoUtils";
-import { 
-  getCurrentUserProfile, 
-  updateUserDisplayName, 
+import {
+  getCurrentUserProfile,
+  updateUserDisplayName,
   updateUserProfilePhoto,
-  subscribeToProfileUpdates 
-} from "../../utils/userProfileUtils"; 
+  subscribeToProfileUpdates,
+} from "../../utils/userProfileUtils";
+import { fetchDeliveryStats } from "../../utils/deliveryUtils";
 
 export default function ProfileScreen({ navigation }) {
   const [userName, setUserName] = useState("");
@@ -57,14 +58,32 @@ export default function ProfileScreen({ navigation }) {
   const [savedData, setSavedData] = useState([]);
   const [editingItem, setEditingItem] = useState(null);
   const [editModal, setEditModal] = useState(false);
+  const [deliveryStats, setDeliveryStats] = useState({
+    totalShipments: 0,
+    totalTransactions: 0,
+    totalSpending: 0,
+    completedDeliveries: 0,
+  });
+  const [isLoadingStats, setIsLoadingStats] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   const CLOUDINARY_API_URL = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`;
 
   const [userProfile, setUserProfile] = useState({
     displayName: "",
-    email: "",  
-    photoURL: null
+    email: "",
+    photoURL: null,
   });
+  useEffect(() => {
+    const loadDeliveryStats = async () => {
+      setIsLoadingStats(true);
+      const stats = await fetchDeliveryStats();
+      setDeliveryStats(stats);
+      setIsLoadingStats(false);
+    };
+
+    loadDeliveryStats();
+  }, []);
 
   // Fetching User Photo
   useEffect(() => {
@@ -79,16 +98,28 @@ export default function ProfileScreen({ navigation }) {
         setUserProfile(profile);
       }
     });
-  
+
     // Cleanup subscription on unmount
     return () => unsubscribe();
   }, []);
+
+  // Fetch delivery stats on mount
+
+  //  Format currency helper
+  const formatCurrency = (amount) => {
+    return new Intl.NumberFormat("en-GB", {
+      style: "currency",
+      currency: "GBP",
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(amount);
+  };
 
   // Function to Change Diplay Photo
   const handleImagePick = async () => {
     const newPhotoURL = await updateUserProfilePhoto(showLoading, hideLoading);
     if (newPhotoURL) {
-      setUserProfile(prev => ({ ...prev, photoURL: newPhotoURL }));
+      setUserProfile((prev) => ({ ...prev, photoURL: newPhotoURL }));
     }
   };
 
@@ -105,12 +136,16 @@ export default function ProfileScreen({ navigation }) {
 
   // Function to Edit User Display name
   const handleEditName = async () => {
-    const success = await updateUserDisplayName(tempUserName, showLoading, hideLoading);
+    const success = await updateUserDisplayName(
+      tempUserName,
+      showLoading,
+      hideLoading
+    );
     if (success) {
-      setUserProfile(prev => ({ 
-        ...prev, 
+      setUserProfile((prev) => ({
+        ...prev,
         displayName: tempUserName.trim(),
-        firstName: tempUserName.trim().split(' ')[0]
+        firstName: tempUserName.trim().split(" ")[0],
       }));
       setIsEditModalVisible(false);
     }
@@ -215,7 +250,9 @@ export default function ProfileScreen({ navigation }) {
 
         <View className="flex-row justify-between items-center mt-6 px-6">
           <View>
-            <Text className="text-xl font-bold text-gray-900">{userProfile.displayName}</Text>
+            <Text className="text-xl font-bold text-gray-900">
+              {userProfile.displayName}
+            </Text>
             <Text className="text-gray-70">{userProfile.email}</Text>
           </View>
 
@@ -231,18 +268,20 @@ export default function ProfileScreen({ navigation }) {
         <View className="px-6 pt-12 pb-6">
           <View className="flex-row justify-between mb-8">
             <View>
-              <Text className="text-2xl font-semibold text-[#8328FA]">20</Text>
+              <Text className="text-2xl font-semibold text-[#8328FA]">
+                {isLoadingStats ? "..." : deliveryStats.totalShipments}{" "}
+              </Text>
               <Text className="text-gray-600">Shipment</Text>
             </View>
             <View>
               <Text className="text-2xl font-semibold text-[#8328FA]">
-                20,56
+                {isLoadingStats ? "..." : deliveryStats.totalTransactions}
               </Text>
               <Text className="text-gray-600">Transaction</Text>
             </View>
             <View>
               <Text className="text-2xl font-semibold text-[#8328FA]">
-                $200
+                {isLoadingStats ? "..." : deliveryStats.totalSpending}
               </Text>
               <Text className="text-gray-600">Spending</Text>
             </View>
