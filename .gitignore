@@ -25,7 +25,9 @@ expo-env.d.ts
 npm-debug.*
 yarn-debug.*
 yarn-error.*
-
+google-services.json
+tookan-backend/google-services.json
+tookan-backend/rapid-delivery-app-1d838-firebase-adminsdk-fbsvc-89ade73eb1.json
 # macOS
 .DS_Store
 *.pem

@@ -3704,7 +3704,10 @@ const PUBLIC_BASE_URL = "http://192.168.43.176:3000";
 // Initialize Firebase Admin SDK (add after dotenv.config())
 try {
   const serviceAccount = JSON.parse(
-    readFileSync("./rapid-delivery-app-1d838-firebase-adminsdk-fbsvc-89ade73eb1.json", "utf8")
+    readFileSync(
+      "./rapid-delivery-app-1d838-firebase-adminsdk-fbsvc-89ade73eb1.json",
+      "utf8"
+    )
   );
 
   admin.initializeApp({
@@ -7396,23 +7399,52 @@ app.get("/api/webhook/tookan/latest/:taskId", (req, res) => {
   }
 });
 // ---------- Start Server ----------
-app.listen(port, "0.0.0.0", () => {
-  console.log(`Server running on ${PUBLIC_BASE_URL}`);
-  console.log(
-    "Remember to expose /webhook to Stripe when testing locally (e.g., via ngrok)."
-  );
-  console.log("Available endpoints:");
-  console.log("  GET  / - Health check");
-  console.log("  GET  /api/health - Service status");
-  console.log("  POST /api/tookan/delivery-cost - Calculate delivery cost");
-  console.log("  POST /api/create-checkout-session - Web checkout (PRIMARY)");
-  console.log("  GET  /api/session/:id/payment-status - Check payment status");
-  console.log(
-    "  GET  /api/session/:id/create-tookan-task - Create/get Tookan task"
-  );
-  console.log("  GET  /api/delivery/:id - Get delivery details");
-  console.log("  POST /webhook - Stripe webhook");
-  console.log("  POST /api/webhook/tookan - Tookan webhook");
-  console.log("  GET  /payment-success - Payment success page");
-  console.log("  GET  /payment-cancel - Payment cancel page");
-});
+// app.listen(port, "0.0.0.0", () => {
+//   console.log(`Server running on ${PUBLIC_BASE_URL}`);
+//   console.log(
+//     "Remember to expose /webhook to Stripe when testing locally (e.g., via ngrok)."
+//   );
+//   console.log("Available endpoints:");
+//   console.log("  GET  / - Health check");
+//   console.log("  GET  /api/health - Service status");
+//   console.log("  POST /api/tookan/delivery-cost - Calculate delivery cost");
+//   console.log("  POST /api/create-checkout-session - Web checkout (PRIMARY)");
+//   console.log("  GET  /api/session/:id/payment-status - Check payment status");
+//   console.log(
+//     "  GET  /api/session/:id/create-tookan-task - Create/get Tookan task"
+//   );
+//   console.log("  GET  /api/delivery/:id - Get delivery details");
+//   console.log("  POST /webhook - Stripe webhook");
+//   console.log("  POST /api/webhook/tookan - Tookan webhook");
+//   console.log("  GET  /payment-success - Payment success page");
+
+//   console.log("  GET  /payment-cancel - Payment cancel page");
+// });
+
+if (process.env.VERCEL === undefined) {
+  app.listen(port, "0.0.0.0", () => {
+    console.log(`Server running on ${PUBLIC_BASE_URL}`);
+    console.log(
+      "Remember to expose /webhook to Stripe when testing locally (e.g., via ngrok)."
+    );
+    console.log("Available endpoints:");
+    console.log("  GET  / - Health check");
+    console.log("  GET  /api/health - Service status");
+    console.log("  POST /api/tookan/delivery-cost - Calculate delivery cost");
+    console.log("  POST /api/create-checkout-session - Web checkout (PRIMARY)");
+    console.log(
+      "  GET  /api/session/:id/payment-status - Check payment status"
+    );
+    console.log(
+      "  GET  /api/session/:id/create-tookan-task - Create/get Tookan task"
+    );
+    console.log("  GET  /api/delivery/:id - Get delivery details");
+    console.log("  POST /webhook - Stripe webhook");
+    console.log("  POST /api/webhook/tookan - Tookan webhook");
+    console.log("  GET  /payment-success - Payment success page");
+
+    console.log("  GET  /payment-cancel - Payment cancel page");
+  });
+}
+
+export default app;
