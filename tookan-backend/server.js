@@ -7398,6 +7398,7 @@ app.get("/api/webhook/tookan/latest/:taskId", (req, res) => {
     });
   }
 });
+app.get("/", (req, res) => res.send("Backend is running on Vercel!"));
 // ---------- Start Server ----------
 // app.listen(port, "0.0.0.0", () => {
 //   console.log(`Server running on ${PUBLIC_BASE_URL}`);
