@@ -538,7 +538,7 @@ import {
   initializeOneSignal,
   registerUserForNotifications,
 } from "../../utils/notificationUtils";
-import { auth } from "../../firebase";
+import { auth, firestore } from "../../firebase";
 import { useFocusEffect } from "@react-navigation/native";
 import { fetchRecentShipments } from "../../utils/deliveryFirestore";
 import {
@@ -547,6 +547,7 @@ import {
   markAllNotificationsAsRead,
   deleteNotification,
 } from "../../utils/notificationFirestore";
+import { doc, getDoc } from "firebase/firestore";
 
 export default function HomeScreen({ navigation }) {
   const [userProfile, setUserProfile] = useState({
@@ -969,6 +970,11 @@ export default function HomeScreen({ navigation }) {
 
                 console.log("🧪 Sending test notification for user:", user.uid);
 
+                // Fetch user profile from Firestore using v9+ syntax
+                const userDocRef = doc(firestore, "users", user.uid);
+                const userDoc = await getDoc(userDocRef);
+                const userData = userDoc.exists() ? userDoc.data() : {};
+
                 const response = await fetch(
                   "https://rapid-fullstack.vercel.app/api/test-notification",
                   {
@@ -976,6 +982,7 @@ export default function HomeScreen({ navigation }) {
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
                       userId: user.uid,
+                      userName: userData.firstName || "User",
                     }),
                   }
                 );
@@ -985,7 +992,9 @@ export default function HomeScreen({ navigation }) {
 
                 if (result.success) {
                   alert(
-                    "✅ Test notification sent! Check your notification tray and bell icon."
+                    `✅ Test notification sent to ${
+                      userData.firstName || "you"
+                    }! Check your notifications.`
                   );
                 } else {
                   alert("❌ Failed: " + (result.error || "Unknown error"));
