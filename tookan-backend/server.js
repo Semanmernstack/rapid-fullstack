@@ -3699,6 +3699,19 @@ try {
   if (process.env.FIREBASE_SERVICE_ACCOUNT) {
     console.log("🔧 Running on Vercel - using environment variable");
     serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+
+    // FIX: Handle escaped newlines in private key
+    if (
+      serviceAccount.private_key &&
+      serviceAccount.private_key.includes("\\n")
+    ) {
+      console.log("🔧 Fixing escaped newlines in private key...");
+      serviceAccount.private_key = serviceAccount.private_key.replace(
+        /\\n/g,
+        "\n"
+      );
+      console.log("✅ Private key fixed");
+    }
   } else {
     // Local development - read from JSON file
     console.log("🔧 Running locally - using JSON file");
