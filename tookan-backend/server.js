@@ -3682,44 +3682,78 @@ import bodyParser from "body-parser";
 import fetch from "node-fetch";
 import dotenv from "dotenv";
 import Stripe from "stripe";
-import admin from "firebase-admin";
 import { readFileSync } from "fs";
+import admin from "firebase-admin";
 import {
-  registerUserToken,
+  sendNotificationByExternalId,
   sendGlobalAnnouncement,
-  sendPushNotification,
-} from "./pushNotificationService.js";
+} from "./oneSignalService.js";
+
+import { registerUserToken, sendPushNotification } from "./expoPushService.js";
 
 dotenv.config();
+try {
+  let serviceAccount;
 
+  // Check if running on Vercel
+  if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+    console.log("🔧 Running on Vercel - using environment variable");
+    serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+  } else {
+    // Local development - read from JSON file
+    console.log("🔧 Running locally - using JSON file");
+    serviceAccount = JSON.parse(
+      readFileSync(
+        "./rapid-delivery-app-1d838-firebase-adminsdk-fbsvc-eb14176c94.json",
+        "utf8"
+      )
+    );
+  }
+
+  if (!admin.apps.length) {
+    admin.initializeApp({
+      credential: admin.credential.cert(serviceAccount),
+    });
+    console.log("✅ Firebase initialized successfully");
+  }
+} catch (error) {
+  console.error("❌ Firebase initialization failed:", error.message);
+  process.exit(1);
+}
+// let serviceAccount;
+
+// try {
+//   // ✅ Read from local JSON file (no .env needed)
+//   serviceAccount = JSON.parse(
+//     readFileSync(
+//       "./rapid-delivery-app-1d838-firebase-adminsdk-fbsvc-eb14176c94.json",
+//       "utf8"
+//     )
+//   );
+
+//   if (!admin.apps.length) {
+//     admin.initializeApp({
+//       credential: admin.credential.cert(serviceAccount),
+//     });
+//     console.log("✅ Firebase initialized successfully");
+//   }
+// } catch (error) {
+//   console.error("❌ Firebase initialization failed:", error.message);
+//   process.exit(1);
+// }
 // ---------- Configuration ----------
 const app = express();
 const port = 3000;
+const db = admin.firestore();
+const auth = admin.auth();
+const messaging = admin.messaging();
 const stripeSecret = process.env.STRIPE_SECRET_KEY;
 const stripe = Stripe(stripeSecret);
 
 // Keep this the same IP your mobile app is using
-const PUBLIC_BASE_URL = "http://192.168.43.176:3000";
+//const PUBLIC_BASE_URL = "http://192.168.43.176:3000";
+const PUBLIC_BASE_URL = "https://rapid-fullstack.vercel.app";
 
-// Initialize Firebase Admin SDK (add after dotenv.config())
-try {
-  const serviceAccount = JSON.parse(
-    readFileSync(
-      "./rapid-delivery-app-1d838-firebase-adminsdk-fbsvc-89ade73eb1.json",
-      "utf8"
-    )
-  );
-
-  admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount),
-    databaseURL: "https://rapid-delivery-app-1d838.firebaseio.com",
-  });
-
-  const db = admin.firestore();
-  console.log("✅ Firebase Admin initialized successfully");
-} catch (error) {
-  console.error("❌ Firebase Admin initialization failed:", error.message);
-}
 const webhookDataStore = {};
 
 // In-memory store (replace with Redis/Postgres in production)
@@ -3988,51 +4022,60 @@ app.get("/", (req, res) => {
     timestamp: new Date().toISOString(),
   });
 });
-app.post("/api/register-token", async (req, res) => {
+async function saveNotificationToFirestore(userId, notificationData) {
   try {
-    const { userId, expoPushToken, platform } = req.body;
+    const notification = {
+      userId,
+      title: notificationData.title,
+      message: notificationData.message,
+      type: notificationData.type || "general",
+      data: notificationData.data || {},
+      read: false,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      shipmentId: notificationData.shipmentId || null,
+      icon: notificationData.icon || "📦",
+    };
 
-    console.log("📥 Token registration request received:");
-    console.log("   userId:", userId);
-    console.log("   expoPushToken:", expoPushToken);
-    console.log("   platform:", platform);
+    const docRef = await db.collection("notifications").add(notification);
+
+    console.log("✅ Notification saved to Firestore:", docRef.id);
+    return { success: true, id: docRef.id };
+  } catch (error) {
+    console.error("❌ Error saving notification to Firestore:", error);
+    return { success: false, error: error.message };
+  }
+}
+
+app.post("/api/register-expo-token", async (req, res) => {
+  try {
+    const { userId, expoPushToken } = req.body;
 
     if (!userId || !expoPushToken) {
       return res.status(400).json({
-        error: "Missing required fields",
-        required: ["userId", "expoPushToken"],
-      });
-    }
-
-    if (!expoPushToken.startsWith("ExponentPushToken[")) {
-      return res.status(400).json({
-        error: "Invalid Expo push token format",
+        success: false,
+        error: "userId and expoPushToken are required",
       });
     }
 
     registerUserToken(userId, expoPushToken);
 
-    // Verify it was stored
-    const storedToken = getUserToken(userId);
-    console.log(
-      "✅ Token stored successfully. Verification:",
-      storedToken === expoPushToken
-    );
+    console.log(`✅ Registered Expo token for user ${userId}`);
 
     res.json({
       success: true,
       message: "Token registered successfully",
       userId,
-      platform: platform || "unknown",
     });
   } catch (error) {
     console.error("❌ Error registering token:", error);
     res.status(500).json({
-      error: "Failed to register token",
-      details: error.message,
+      success: false,
+      error: error.message,
     });
   }
 });
+
+// Test notification endpoint
 
 // Send shipment update notification
 app.post("/api/shipment-update", async (req, res) => {
@@ -4040,185 +4083,320 @@ app.post("/api/shipment-update", async (req, res) => {
     const { userId, userName, itemName, quantity, shipmentId } = req.body;
 
     if (!userId) {
-      return res.status(400).json({ error: "userId is required" });
-    }
-
-    const title = `Purchase Confirmed 🎉`;
-    const message = `Hey ${userName || "there"}, your shipment of ${
-      quantity || 1
-    } ${itemName || "item"}(s) has been processed successfully.`;
-
-    const result = await sendPushNotification(userId, title, message, {
-      type: "shipment_update",
-      shipmentId: shipmentId,
-      timestamp: new Date().toISOString(),
-    });
-
-    if (result.success) {
-      console.log(`✅ Shipment notification sent to user: ${userId}`);
-      res.json({
-        success: true,
-        message: "Notification sent successfully",
-        notificationId: result.data?.id,
-      });
-    } else {
-      res.status(500).json({
-        error: "Failed to send notification",
-        details: result.error,
-      });
-    }
-  } catch (error) {
-    console.error("Error in shipment-update:", error);
-    res.status(500).json({
-      error: "Internal server error",
-      details: error.message,
-    });
-  }
-});
-
-// Send delivery status update
-app.post("/api/delivery-status", async (req, res) => {
-  try {
-    const { userId, status, trackingNumber, estimatedTime, location } =
-      req.body;
-
-    if (!userId || !status) {
       return res.status(400).json({
-        error: "userId and status are required",
+        success: false,
+        error: "userId is required",
       });
     }
 
-    const statusMessages = {
-      picked_up: "📦 Package Picked Up",
-      in_transit: "🚚 Package In Transit",
-      out_for_delivery: "🏃 Out for Delivery",
-      delivered: "✅ Package Delivered",
-      delayed: "⏰ Delivery Delayed",
-    };
+    const title = "📦 Shipment Update";
+    const message = `Hi ${userName}! Your ${itemName} (${quantity}) is on its way!`;
 
-    const title = statusMessages[status] || "Package Update";
-    let message = trackingNumber
-      ? `Tracking: ${trackingNumber}`
-      : "Your package status has been updated";
+    // 1. Send push notification via OneSignal
+    const pushResult = await sendNotificationByExternalId(
+      userId,
+      title,
+      message,
+      {
+        shipmentId,
+        type: "shipment_update",
+        screen: "TrackShipment",
+      }
+    );
 
-    if (estimatedTime) {
-      message += `\nETA: ${estimatedTime}`;
-    }
-
-    if (location) {
-      message += `\nLocation: ${location}`;
-    }
-
-    const result = await sendPushNotification(userId, title, message, {
-      type: "delivery_status",
-      status: status,
-      trackingNumber: trackingNumber,
-      estimatedTime: estimatedTime,
-      location: location,
-      timestamp: new Date().toISOString(),
+    // 2. Save to Firestore for in-app notification list
+    const firestoreResult = await saveNotificationToFirestore(userId, {
+      title,
+      message,
+      type: "shipment_update",
+      shipmentId,
+      icon: "🚚",
+      data: {
+        shipmentId,
+        itemName,
+        quantity,
+      },
     });
 
-    if (result.success) {
-      console.log(`✅ Delivery status notification sent to user: ${userId}`);
-      res.json({
-        success: true,
-        message: "Status update sent successfully",
-      });
-    } else {
-      res.status(500).json({
-        error: "Failed to send status update",
-        details: result.error,
-      });
-    }
+    console.log("✅ Shipment notification sent and saved");
+
+    res.json({
+      success: true,
+      push: pushResult,
+      firestore: firestoreResult,
+    });
   } catch (error) {
-    console.error("Error in delivery-status:", error);
+    console.error("❌ Error sending shipment notification:", error);
     res.status(500).json({
-      error: "Internal server error",
-      details: error.message,
+      success: false,
+      error: error.message,
     });
   }
 });
 
-// Send global announcement to all users
-app.post("/api/announce", async (req, res) => {
+// Send delivery completed notification
+app.post("/api/delivery-completed", async (req, res) => {
   try {
-    const { title, message } = req.body;
+    const { userId, userName, shipmentId, itemName } = req.body;
+
+    if (!userId) {
+      return res.status(400).json({
+        success: false,
+        error: "userId is required",
+      });
+    }
+
+    const title = "✅ Delivery Completed!";
+    const message = `Great news ${userName}! Your ${
+      itemName || "package"
+    } has been delivered successfully.`;
+
+    // 1. Send push notification
+    const pushResult = await sendNotificationByExternalId(
+      userId,
+      title,
+      message,
+      {
+        shipmentId,
+        type: "delivery_completed",
+        screen: "Home",
+      }
+    );
+
+    // 2. Save to Firestore
+    const firestoreResult = await saveNotificationToFirestore(userId, {
+      title,
+      message,
+      type: "delivery_completed",
+      shipmentId,
+      icon: "✅",
+      data: {
+        shipmentId,
+        itemName,
+      },
+    });
+
+    console.log("✅ Delivery notification sent and saved");
+
+    res.json({
+      success: true,
+      push: pushResult,
+      firestore: firestoreResult,
+    });
+  } catch (error) {
+    console.error("❌ Error sending delivery notification:", error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
+// Send payment success notification
+app.post("/api/payment-success-notification", async (req, res) => {
+  try {
+    const { userId, userName, amount, shipmentId } = req.body;
+
+    if (!userId) {
+      return res.status(400).json({
+        success: false,
+        error: "userId is required",
+      });
+    }
+
+    const title = "💳 Payment Successful";
+    const message = `Hi ${userName}! Your payment of ${amount} has been processed successfully.`;
+
+    // Send push notification
+    const pushResult = await sendNotificationByExternalId(
+      userId,
+      title,
+      message,
+      {
+        shipmentId,
+        type: "payment_success",
+        screen: "Home",
+      }
+    );
+
+    // Save to Firestore
+    const firestoreResult = await saveNotificationToFirestore(userId, {
+      title,
+      message,
+      type: "payment_success",
+      shipmentId,
+      icon: "💳",
+      data: {
+        shipmentId,
+        amount,
+      },
+    });
+
+    console.log("✅ Payment notification sent and saved");
+
+    res.json({
+      success: true,
+      push: pushResult,
+      firestore: firestoreResult,
+    });
+  } catch (error) {
+    console.error("❌ Error sending payment notification:", error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+});
+app.post("/api/test-notification", async (req, res) => {
+  try {
+    const { userId } = req.body;
+
+    if (!userId) {
+      return res.status(400).json({
+        success: false,
+        error: "userId is required",
+      });
+    }
+
+    const title = "🧪 Test Notification";
+    const message = "This is a test notification from your Rapid Delivery App!";
+
+    // Send push notification
+    const pushResult = await sendNotificationByExternalId(
+      userId,
+      title,
+      message,
+      { type: "test" }
+    );
+
+    // Save to Firestore
+    const firestoreResult = await saveNotificationToFirestore(userId, {
+      title,
+      message,
+      type: "test",
+      icon: "🧪",
+      data: {},
+    });
+
+    console.log("✅ Test notification sent and saved");
+
+    res.json({
+      success: true,
+      push: pushResult,
+      firestore: firestoreResult,
+    });
+  } catch (error) {
+    console.error("❌ Test notification error:", error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
+// Send promotion notification
+app.post("/api/send-promotion", async (req, res) => {
+  try {
+    const { userId, userName, discount, code } = req.body;
+
+    if (!userId) {
+      return res.status(400).json({
+        success: false,
+        error: "userId is required",
+      });
+    }
+
+    const title = "🎉 Special Offer!";
+    const message = `Hi ${userName}! Get ${discount}% off your next delivery. Use code: ${code}`;
+
+    // Send push notification
+    const pushResult = await sendNotificationByExternalId(
+      userId,
+      title,
+      message,
+      {
+        type: "promotion",
+        screen: "Send",
+      }
+    );
+
+    // Save to Firestore
+    const firestoreResult = await saveNotificationToFirestore(userId, {
+      title,
+      message,
+      type: "promotion",
+      icon: "🎉",
+      data: {
+        discount,
+        code,
+      },
+    });
+
+    console.log("✅ Promotion notification sent and saved");
+
+    res.json({
+      success: true,
+      push: pushResult,
+      firestore: firestoreResult,
+    });
+  } catch (error) {
+    console.error("❌ Error sending promotion notification:", error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
+// Send global announcement (to all users)
+app.post("/api/send-announcement", async (req, res) => {
+  try {
+    const { title, message, data } = req.body;
 
     if (!title || !message) {
       return res.status(400).json({
-        error: "Both title and message are required",
+        success: false,
+        error: "title and message are required",
       });
     }
 
-    console.log(`📢 Sending global announcement: "${title}"`);
+    // Send push notification to all users via OneSignal
+    const pushResult = await sendGlobalAnnouncement(title, message, data);
 
-    const result = await sendGlobalAnnouncement(title, message);
+    // Get all user IDs from Firestore
+    const usersSnapshot = await db.collection("users").get();
+    const userIds = usersSnapshot.docs.map((doc) => doc.id);
 
-    if (result.success) {
-      res.json({
-        success: true,
-        message: "Announcement sent to all registered users",
-        sentCount: result.data?.length || 0,
-      });
-    } else {
-      res.status(500).json({
-        error: "Failed to send announcement",
-        details: result.error,
-      });
-    }
+    // Save to Firestore for each user
+    const firestorePromises = userIds.map((userId) =>
+      saveNotificationToFirestore(userId, {
+        title,
+        message,
+        type: "announcement",
+        icon: "📢",
+        data: data || {},
+      })
+    );
+
+    await Promise.all(firestorePromises);
+
+    console.log(`✅ Announcement sent to ${userIds.length} users`);
+
+    res.json({
+      success: true,
+      push: pushResult,
+      userCount: userIds.length,
+    });
   } catch (error) {
-    console.error("Error in announce:", error);
+    console.error("❌ Error sending announcement:", error);
     res.status(500).json({
-      error: "Internal server error",
-      details: error.message,
+      success: false,
+      error: error.message,
     });
   }
 });
 
-// Send driver assignment notification
-app.post("/api/driver-assigned", async (req, res) => {
-  try {
-    const { userId, driverName, driverPhone, estimatedArrival } = req.body;
-
-    if (!userId || !driverName) {
-      return res.status(400).json({
-        error: "userId and driverName are required",
-      });
-    }
-
-    const title = "🚗 Driver Assigned!";
-    const message = `${driverName} will deliver your package${
-      estimatedArrival ? ` by ${estimatedArrival}` : ""
-    }`;
-
-    const result = await sendPushNotification(userId, title, message, {
-      type: "driver_assigned",
-      driverName: driverName,
-      driverPhone: driverPhone,
-      estimatedArrival: estimatedArrival,
-      timestamp: new Date().toISOString(),
-    });
-
-    if (result.success) {
-      console.log(`✅ Driver assignment notification sent to user: ${userId}`);
-      res.json({
-        success: true,
-        message: "Driver assignment notification sent",
-      });
-    } else {
-      res.status(500).json({
-        error: "Failed to send notification",
-        details: result.error,
-      });
-    }
-  } catch (error) {
-    console.error("Error in driver-assigned:", error);
-    res.status(500).json({
-      error: "Internal server error",
-      details: error.message,
-    });
-  }
-});
+// Test notification endpoint
 
 app.get("/api/health", (req, res) => {
   res.json({
@@ -4652,8 +4830,10 @@ app.get("/payment-success", async (req, res) => {
               'rapiddelivery://payment-success?session_id=' + sessionId,
               'com.yourcompany.rapiddelivery://payment-success?session_id=' + sessionId,
               // Also try the web URL as a fallback for universal links
-              'https://192.168.43.176:3000/payment-success?session_id=' + sessionId,
-              'http://192.168.43.176:3000/payment-success?session_id=' + sessionId
+              'https://rapid-fullstack.vercel.app/payment-success?session_id=' + sessionId,
+              'https://rapid-fullstack.vercel.app/payment-success?session_id=' + sessionId 
+              // 'https://192.168.43.176:3000/payment-success?session_id=' + sessionId,
+              // 'http://192.168.43.176:3000/payment-success?session_id=' + sessionId
             ];
             
             console.log('Attempt', redirectAttempts, '- Trying to redirect to app with session:', sessionId);

@@ -16,7 +16,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.yourcompany.rapiddelivery",
-      "associatedDomains": ["applinks:192.168.43.176:3000"],
+      "associatedDomains": ["applinks:rapid-fullstack.vercel.app"],
       "config": {
         "googleMapsApiKey": "AIzaSyC_V4seFQ1G-ibCyWfmHCBkJoF0ZmNkPVc"
       },
@@ -66,15 +66,13 @@
           "data": [
             {
               "scheme": "https",
-              "host": "192.168.43.176",
-              "port": "3000",
+              "host": "rapid-fullstack.vercel.app",
               "pathPrefix": "/payment-success"
             },
             {
-              "scheme": "http",
-              "host": "192.168.43.176",
-              "port": "3000",
-              "pathPrefix": "/payment-success"
+              "scheme": "https",
+              "host": "rapid-fullstack.vercel.app",
+              "pathPrefix": "/payment-cancel"
             }
           ]
         }
@@ -86,6 +84,14 @@
     "plugins": [
       "expo-router",
       "expo-web-browser",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "googleServicesFile": "./google-services.json"
+          }
+        }
+      ],
       [
         "@stripe/stripe-react-native",
         {
@@ -101,6 +107,12 @@
           "sounds": [],
           "mode": "production"
         }
+      ],
+      [
+        "onesignal-expo-plugin",
+        {
+          "mode": "development"
+        }
       ]
     ],
     "notification": {
@@ -113,15 +125,15 @@
       "prefixes": [
         "rapiddelivery://",
         "com.yourcompany.rapiddelivery://",
-        "https://192.168.43.176:3000",
-        "http://192.168.43.176:3000"
+        "https://rapid-fullstack.vercel.app"
       ]
     },
     "extra": {
       "router": {},
       "eas": {
         "projectId": "233858dc-d585-4926-ba6a-6d7e3b97937f"
-      }
+      },
+      "oneSignalAppId": "779bd2f8-d8b6-4686-b47b-4b1740ef7390"
     }
   }
 }

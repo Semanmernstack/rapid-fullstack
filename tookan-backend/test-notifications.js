@@ -2,10 +2,10 @@
 // Run this script to test your notifications
 import axios from "axios";
 
-const BASE_URL = "http://192.168.43.176:3000";
+const BASE_URL = "https://rapid-fullstack.vercel.app";
 
 // Test configuration
-const TEST_USER_ID = "test-user-123"; // Replace with actual Firebase user ID
+const TEST_USER_ID = "wNJOV7nmOyPdC91cPZs1dM7kHA12"; // Replace with actual Firebase user ID
 const TEST_TOKEN = "ExponentPushToken[xxxxxxxxxxxxxxxxxxxxxx]"; // Replace with actual token from app
 
 async function testRegisterToken() {

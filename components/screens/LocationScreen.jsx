@@ -5576,7 +5576,8 @@ export default function LocationScreen() {
     verifiedPayment,
   } = params;
 
-  const backendUrl = "http://192.168.43.176:3000";
+  //const backendUrl = "http://192.168.43.176:3000";
+  const backendUrl = "https://rapid-fullstack.vercel.app";
 
   // // Function to get coordinates from postcode using Google Geocoding API
 
@@ -7256,7 +7257,7 @@ export default function LocationScreen() {
         bounces={false}
       >
         {/* Live Map Container */}
-        <View style={{ height: 350, backgroundColor: "#f5f5f5" }}>
+        <View style={{  height: screenHeight * 0.8, backgroundColor: "#f5f5f5" }}>
           <MapView
             ref={mapRef}
             provider={PROVIDER_GOOGLE}

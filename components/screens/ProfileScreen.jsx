@@ -281,7 +281,9 @@ export default function ProfileScreen({ navigation }) {
             </View>
             <View>
               <Text className="text-2xl font-semibold text-[#8328FA]">
-                {isLoadingStats ? "..." : deliveryStats.totalSpending}
+                {isLoadingStats
+                  ? "..."
+                  : formatCurrency(Number(deliveryStats.totalSpending || 0))}
               </Text>
               <Text className="text-gray-600">Spending</Text>
             </View>
