@@ -3733,27 +3733,27 @@ try {
   console.error("❌ Firebase initialization failed:", error.message);
   process.exit(1);
 }
-// let serviceAccount;
+let serviceAccount;
 
-// try {
-//   // ✅ Read from local JSON file (no .env needed)
-//   serviceAccount = JSON.parse(
-//     readFileSync(
-//       "./rapid-delivery-app-1d838-firebase-adminsdk-fbsvc-eb14176c94.json",
-//       "utf8"
-//     )
-//   );
+try {
+  // ✅ Read from local JSON file (no .env needed)
+  serviceAccount = JSON.parse(
+    readFileSync(
+      "./rapid-delivery-app-1d838-firebase-adminsdk-fbsvc-eb14176c94.json",
+      "utf8"
+    )
+  );
 
-//   if (!admin.apps.length) {
-//     admin.initializeApp({
-//       credential: admin.credential.cert(serviceAccount),
-//     });
-//     console.log("✅ Firebase initialized successfully");
-//   }
-// } catch (error) {
-//   console.error("❌ Firebase initialization failed:", error.message);
-//   process.exit(1);
-// }
+  if (!admin.apps.length) {
+    admin.initializeApp({
+      credential: admin.credential.cert(serviceAccount),
+    });
+    console.log("✅ Firebase initialized successfully");
+  }
+} catch (error) {
+  console.error("❌ Firebase initialization failed:", error.message);
+  process.exit(1);
+}
 // ---------- Configuration ----------
 const app = express();
 const port = 3000;
@@ -4041,29 +4041,29 @@ app.get("/", (req, res) => {
     },
   });
 });
-async function saveNotificationToFirestore(userId, notificationData) {
-  try {
-    const notification = {
-      userId,
-      title: notificationData.title,
-      message: notificationData.message,
-      type: notificationData.type || "general",
-      data: notificationData.data || {},
-      read: false,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      shipmentId: notificationData.shipmentId || null,
-      icon: notificationData.icon || "📦",
-    };
+// async function saveNotificationToFirestore(userId, notificationData) {
+//   try {
+//     const notification = {
+//       userId,
+//       title: notificationData.title,
+//       message: notificationData.message,
+//       type: notificationData.type || "general",
+//       data: notificationData.data || {},
+//       read: false,
+//       createdAt: admin.firestore.FieldValue.serverTimestamp(),
+//       shipmentId: notificationData.shipmentId || null,
+//       icon: notificationData.icon || "📦",
+//     };
 
-    const docRef = await db.collection("notifications").add(notification);
+//     const docRef = await db.collection("notifications").add(notification);
 
-    console.log("✅ Notification saved to Firestore:", docRef.id);
-    return { success: true, id: docRef.id };
-  } catch (error) {
-    console.error("❌ Error saving notification to Firestore:", error);
-    return { success: false, error: error.message };
-  }
-}
+//     console.log("✅ Notification saved to Firestore:", docRef.id);
+//     return { success: true, id: docRef.id };
+//   } catch (error) {
+//     console.error("❌ Error saving notification to Firestore:", error);
+//     return { success: false, error: error.message };
+//   }
+// }
 
 app.post("/api/register-expo-token", async (req, res) => {
   try {
@@ -4292,43 +4292,33 @@ app.post("/api/test-notification", async (req, res) => {
       });
     }
 
-    // Check Firebase
-    let firebaseStatus = "OK";
-    try {
-      await db.collection("notifications").limit(1).get();
-    } catch (error) {
-      firebaseStatus = error.message;
-    }
-
     const title = "🧪 Test Notification";
     const message = "This is a test notification from your Rapid Delivery App!";
 
-    // 1. Send push notification via OneSignal
+    // Only send push notification via OneSignal
     console.log("📤 Sending OneSignal push notification...");
     const pushResult = await sendNotificationByExternalId(
       userId,
       title,
       message,
-      { type: "test", timestamp: Date.now() }
+      {
+        type: "test",
+        timestamp: Date.now(),
+        // Include data so app can save to Firestore
+        saveToFirestore: true,
+        notificationData: {
+          title,
+          message,
+          type: "test",
+          icon: "🧪",
+        },
+      }
     );
 
     console.log("OneSignal Result:", pushResult);
 
-    // 2. Save to Firestore for in-app notifications
-    console.log("💾 Saving to Firestore...");
-    const firestoreResult = await saveNotificationToFirestore(userId, {
-      title,
-      message,
-      type: "test",
-      icon: "🧪",
-      data: { testId: Date.now() },
-    });
-
-    console.log("Firestore Result:", firestoreResult);
-
-    // Detailed response
     const response = {
-      success: pushResult.success || firestoreResult.success,
+      success: pushResult.success,
       timestamp: new Date().toISOString(),
       userId,
       checks: {
@@ -4337,14 +4327,10 @@ app.post("/api/test-notification", async (req, res) => {
           appId: process.env.ONESIGNAL_APP_ID,
           result: pushResult,
         },
-        firestore: {
-          configured: firebaseStatus === "OK",
-          status: firebaseStatus,
-          result: firestoreResult,
-        },
       },
       push: pushResult,
-      firestore: firestoreResult,
+      message:
+        "Notification sent via OneSignal only. App will save to Firestore.",
     };
 
     console.log("✅ Test notification completed");
@@ -4360,6 +4346,79 @@ app.post("/api/test-notification", async (req, res) => {
     });
   }
 });
+// app.post("/api/test-notification", async (req, res) => {
+//   try {
+//     const { userId } = req.body;
+
+//     if (!userId) {
+//       return res.status(400).json({
+//         success: false,
+//         error: "userId is required",
+//       });
+//     }
+
+//     console.log("🧪 Testing notification system...");
+//     console.log(`   User ID: ${userId}`);
+
+//     // Check OneSignal credentials
+//     if (!process.env.ONESIGNAL_APP_ID || !process.env.ONESIGNAL_REST_API_KEY) {
+//       return res.status(500).json({
+//         success: false,
+//         error: "OneSignal credentials not configured",
+//       });
+//     }
+
+//     const title = "🧪 Test Notification";
+//     const message = "This is a test notification from your Rapid Delivery App!";
+
+//     // Only send push notification via OneSignal
+//     console.log("📤 Sending OneSignal push notification...");
+//     const pushResult = await sendNotificationByExternalId(
+//       userId,
+//       title,
+//       message,
+//       {
+//         type: "test",
+//         timestamp: Date.now(),
+//         // Include data so app can save to Firestore
+//         saveToFirestore: true,
+//         notificationData: {
+//           title,
+//           message,
+//           type: "test",
+//           icon: "🧪",
+//         },
+//       }
+//     );
+
+//     console.log("OneSignal Result:", pushResult);
+
+//     const response = {
+//       success: pushResult.success,
+//       timestamp: new Date().toISOString(),
+//       userId,
+//       checks: {
+//         oneSignal: {
+//           configured: true,
+//           appId: process.env.ONESIGNAL_APP_ID,
+//           result: pushResult,
+//         },
+//       },
+//       push: pushResult,
+//       message: "Notification sent. App will save to Firestore on receive.",
+//     };
+
+//     console.log("✅ Test notification completed");
+
+//     res.json(response);
+//   } catch (error) {
+//     console.error("❌ Test notification error:", error);
+//     res.status(500).json({
+//       success: false,
+//       error: error.message,
+//     });
+//   }
+// });
 // Send promotion notification
 app.post("/api/send-promotion", async (req, res) => {
   try {

@@ -269,21 +269,32 @@ const ONESIGNAL_REST_API_KEY = process.env.ONESIGNAL_REST_API_KEY;
 
 // Detect API version based on key format
 const isV2Key = ONESIGNAL_REST_API_KEY?.startsWith("os_v2_");
+
+// ✅ FIXED: Use correct endpoints for each API version
 const API_ENDPOINT = isV2Key
-  ? "https://api.onesignal.com/notifications"
+  ? `https://api.onesignal.com/notifications?app_id=${ONESIGNAL_APP_ID}`
   : "https://onesignal.com/api/v1/notifications";
 
 console.log(`OneSignal API Version: ${isV2Key ? "v2 (new)" : "v1 (legacy)"}`);
 console.log(`API Endpoint: ${API_ENDPOINT}`);
+console.log(`App ID: ${ONESIGNAL_APP_ID}`);
+console.log(
+  `API Key (first 10 chars): ${ONESIGNAL_REST_API_KEY?.substring(0, 10)}...`
+);
 
-// Build headers based on API version
+// ✅ FIXED: Build headers based on API version
 function getHeaders() {
-  return {
-    "Content-Type": "application/json",
-    ...(isV2Key
-      ? { Authorization: `Bearer ${ONESIGNAL_REST_API_KEY}` }
-      : { Authorization: `Basic ${ONESIGNAL_REST_API_KEY}` }),
-  };
+  if (isV2Key) {
+    return {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${ONESIGNAL_REST_API_KEY}`,
+    };
+  } else {
+    return {
+      "Content-Type": "application/json; charset=utf-8",
+      Authorization: `Basic ${ONESIGNAL_REST_API_KEY}`,
+    };
+  }
 }
 
 // Store user mappings (use database in production)
@@ -419,8 +430,7 @@ export async function sendBulkPushNotifications(
 }
 
 /**
- * Send notification by external user ID (more efficient)
- * Works with both v1 and v2 API
+ * ✅ FIXED: Send notification by external user ID
  */
 export async function sendNotificationByExternalId(
   userId,
@@ -429,49 +439,58 @@ export async function sendNotificationByExternalId(
   data = {}
 ) {
   try {
-    const notification = isV2Key
-      ? {
-          // v2 API format with aliases
-          app_id: ONESIGNAL_APP_ID,
-          include_aliases: {
-            external_id: [userId],
-          },
-          target_channel: "push",
-          headings: { en: title },
-          contents: { en: message },
-          data: {
-            ...data,
-            userId,
-            sentAt: new Date().toISOString(),
-          },
-        }
-      : {
-          // v1 API format
-          app_id: ONESIGNAL_APP_ID,
-          include_external_user_ids: [userId],
-          headings: { en: title },
-          contents: { en: message },
-          data: {
-            ...data,
-            userId,
-            sentAt: new Date().toISOString(),
-          },
-          priority: 10,
-        };
+    let notification;
+    let endpoint = API_ENDPOINT;
+
+    if (isV2Key) {
+      // v2 API format with aliases
+      notification = {
+        target_channel: "push",
+        headings: { en: title },
+        contents: { en: message },
+        data: {
+          ...data,
+          userId,
+          sentAt: new Date().toISOString(),
+        },
+        include_aliases: {
+          external_id: [userId],
+        },
+      };
+    } else {
+      // v1 API format
+      notification = {
+        app_id: ONESIGNAL_APP_ID,
+        include_external_user_ids: [userId],
+        headings: { en: title },
+        contents: { en: message },
+        data: {
+          ...data,
+          userId,
+          sentAt: new Date().toISOString(),
+        },
+        priority: 10,
+        android_channel_id: "default",
+      };
+    }
 
     console.log(
       `📤 Sending notification to external user ${userId} via ${
         isV2Key ? "v2" : "v1"
       } API...`
     );
+    console.log(`Endpoint: ${endpoint}`);
+    console.log(`Headers:`, JSON.stringify(getHeaders(), null, 2));
 
-    const response = await fetch(API_ENDPOINT, {
+    const response = await fetch(endpoint, {
       method: "POST",
       headers: getHeaders(),
       body: JSON.stringify(notification),
     });
 
     const result = await response.json();
+    console.log(`Response status: ${response.status}`);
+    console.log(`Response body:`, JSON.stringify(result, null, 2));
 
     if (response.ok) {
       console.log(`✅ Notification sent to external user ${userId}`);
@@ -484,6 +503,7 @@ export async function sendNotificationByExternalId(
       return {
         success: false,
         error: result.errors || result.error || "Unknown error",
+        details: result,
       };
     }
   } catch (error) {
@@ -493,27 +513,46 @@ export async function sendNotificationByExternalId(
 }
 
 /**
- * Send announcement to all app users
+ * ✅ FIXED: Send announcement to all app users
  */
 export async function sendGlobalAnnouncement(title, message, data = {}) {
   try {
-    const notification = {
-      app_id: ONESIGNAL_APP_ID,
-      included_segments: ["All"],
-      headings: { en: title },
-      contents: { en: message },
-      data: {
-        ...data,
-        type: "announcement",
-        sentAt: new Date().toISOString(),
-      },
-    };
+    let notification;
+    let endpoint = API_ENDPOINT;
+
+    if (isV2Key) {
+      // v2 API format
+      notification = {
+        target_channel: "push",
+        headings: { en: title },
+        contents: { en: message },
+        data: {
+          ...data,
+          type: "announcement",
+          sentAt: new Date().toISOString(),
+        },
+        included_segments: ["All"],
+      };
+    } else {
+      // v1 API format
+      notification = {
+        app_id: ONESIGNAL_APP_ID,
+        included_segments: ["All"],
+        headings: { en: title },
+        contents: { en: message },
+        data: {
+          ...data,
+          type: "announcement",
+          sentAt: new Date().toISOString(),
+        },
+      };
+    }
 
     console.log(
       `📢 Sending global announcement via ${isV2Key ? "v2" : "v1"} API...`
     );
 
-    const response = await fetch(API_ENDPOINT, {
+    const response = await fetch(endpoint, {
       method: "POST",
       headers: getHeaders(),
       body: JSON.stringify(notification),
