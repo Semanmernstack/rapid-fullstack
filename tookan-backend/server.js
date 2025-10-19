@@ -4468,6 +4468,159 @@ app.post("/api/send-announcement", async (req, res) => {
 //     },
 //   });
 // });
+// Add this endpoint to your server.js to debug Firebase issues
+
+app.get("/api/debug/firebase-status", async (req, res) => {
+  try {
+    const status = {
+      timestamp: new Date().toISOString(),
+      environment: {
+        hasFirebaseEnvVar: !!process.env.FIREBASE_SERVICE_ACCOUNT,
+        envVarLength: process.env.FIREBASE_SERVICE_ACCOUNT?.length || 0,
+        nodeEnv: process.env.NODE_ENV || "development",
+      },
+      firebase: {
+        adminAppsCount: admin.apps.length,
+        adminInitialized: admin.apps.length > 0,
+      },
+    };
+
+    // Try to parse the service account
+    if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+      try {
+        const parsed = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+        status.serviceAccount = {
+          canParse: true,
+          projectId: parsed.project_id || null,
+          clientEmail: parsed.client_email || null,
+          hasPrivateKey: !!parsed.private_key,
+          privateKeyLength: parsed.private_key?.length || 0,
+          privateKeyStartsWith: parsed.private_key?.substring(0, 30) || null,
+          hasBackslashN: parsed.private_key?.includes("\\n") || false,
+          hasActualNewline: parsed.private_key?.includes("\n") || false,
+        };
+
+        // Try to fix the private key
+        if (parsed.private_key && parsed.private_key.includes("\\n")) {
+          const fixedKey = parsed.private_key.replace(/\\n/g, "\n");
+          status.privateKeyFix = {
+            needed: true,
+            fixedLength: fixedKey.length,
+            fixedStartsWith: fixedKey.substring(0, 30),
+          };
+        }
+      } catch (e) {
+        status.serviceAccount = {
+          canParse: false,
+          error: e.message,
+        };
+      }
+    }
+
+    // Try to test Firestore
+    if (admin.apps.length > 0) {
+      try {
+        status.firebase.projectId = admin.app().options.projectId;
+
+        // Attempt a Firestore operation
+        const testRef = admin.firestore().collection("_debug_test").doc("test");
+        await testRef.set({
+          timestamp: admin.firestore.FieldValue.serverTimestamp(),
+          test: true,
+        });
+
+        const doc = await testRef.get();
+
+        status.firestore = {
+          canWrite: true,
+          canRead: doc.exists,
+          testPassed: doc.exists,
+        };
+
+        // Clean up
+        await testRef.delete();
+      } catch (e) {
+        status.firestore = {
+          canWrite: false,
+          error: e.message,
+          errorCode: e.code,
+        };
+      }
+    } else {
+      status.firestore = {
+        error: "Firebase Admin not initialized",
+      };
+    }
+
+    res.json(status);
+  } catch (error) {
+    res.status(500).json({
+      error: error.message,
+      stack: error.stack,
+    });
+  }
+});
+
+// Also add a simple re-initialization endpoint
+app.post("/api/debug/reinit-firebase", async (req, res) => {
+  try {
+    if (!process.env.FIREBASE_SERVICE_ACCOUNT) {
+      return res.status(400).json({
+        success: false,
+        error: "FIREBASE_SERVICE_ACCOUNT not set",
+      });
+    }
+
+    // Parse and fix the service account
+    const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+
+    if (serviceAccount.private_key) {
+      serviceAccount.private_key = serviceAccount.private_key.replace(
+        /\\n/g,
+        "\n"
+      );
+    }
+
+    // Try to initialize (will fail if already initialized)
+    let result = {};
+
+    if (admin.apps.length === 0) {
+      admin.initializeApp({
+        credential: admin.credential.cert(serviceAccount),
+      });
+      result.action = "initialized";
+    } else {
+      result.action = "already_initialized";
+      result.projectId = admin.app().options.projectId;
+    }
+
+    // Test Firestore
+    const testRef = admin.firestore().collection("_reinit_test").doc("test");
+    await testRef.set({
+      timestamp: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    const doc = await testRef.get();
+    await testRef.delete();
+
+    result.firestoreTest = {
+      success: doc.exists,
+      timestamp: doc.data()?.timestamp?.toDate().toISOString(),
+    };
+
+    res.json({
+      success: true,
+      result,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      code: error.code,
+      stack: error.stack,
+    });
+  }
+});
 app.get("/api/test/firestore", async (req, res) => {
   try {
     const testDoc = {
