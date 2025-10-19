@@ -4020,6 +4020,12 @@ app.get("/", (req, res) => {
     message: "Delivery API running",
     status: "OK",
     timestamp: new Date().toISOString(),
+    endpoints: {
+      health: "/api/health",
+      test_notification: "POST /api/test-notification",
+      test_firestore: "/api/test/firestore",
+      test_onesignal: "POST /api/test/onesignal",
+    },
   });
 });
 async function saveNotificationToFirestore(userId, notificationData) {
@@ -4258,42 +4264,89 @@ app.post("/api/test-notification", async (req, res) => {
       });
     }
 
+    console.log("🧪 Testing notification system...");
+    console.log(`   User ID: ${userId}`);
+
+    // Check OneSignal credentials
+    if (!process.env.ONESIGNAL_APP_ID || !process.env.ONESIGNAL_REST_API_KEY) {
+      return res.status(500).json({
+        success: false,
+        error: "OneSignal credentials not configured",
+        details: {
+          hasAppId: !!process.env.ONESIGNAL_APP_ID,
+          hasApiKey: !!process.env.ONESIGNAL_REST_API_KEY,
+        },
+      });
+    }
+
+    // Check Firebase
+    let firebaseStatus = "OK";
+    try {
+      await db.collection("notifications").limit(1).get();
+    } catch (error) {
+      firebaseStatus = error.message;
+    }
+
     const title = "🧪 Test Notification";
     const message = "This is a test notification from your Rapid Delivery App!";
 
-    // Send push notification
+    // 1. Send push notification via OneSignal
+    console.log("📤 Sending OneSignal push notification...");
     const pushResult = await sendNotificationByExternalId(
       userId,
       title,
       message,
-      { type: "test" }
+      { type: "test", timestamp: Date.now() }
     );
 
-    // Save to Firestore
+    console.log("OneSignal Result:", pushResult);
+
+    // 2. Save to Firestore for in-app notifications
+    console.log("💾 Saving to Firestore...");
     const firestoreResult = await saveNotificationToFirestore(userId, {
       title,
       message,
       type: "test",
       icon: "🧪",
-      data: {},
+      data: { testId: Date.now() },
     });
 
-    console.log("✅ Test notification sent and saved");
+    console.log("Firestore Result:", firestoreResult);
 
-    res.json({
-      success: true,
+    // Detailed response
+    const response = {
+      success: pushResult.success || firestoreResult.success,
+      timestamp: new Date().toISOString(),
+      userId,
+      checks: {
+        oneSignal: {
+          configured: true,
+          appId: process.env.ONESIGNAL_APP_ID,
+          result: pushResult,
+        },
+        firestore: {
+          configured: firebaseStatus === "OK",
+          status: firebaseStatus,
+          result: firestoreResult,
+        },
+      },
       push: pushResult,
       firestore: firestoreResult,
-    });
+    };
+
+    console.log("✅ Test notification completed");
+    console.log("Response:", JSON.stringify(response, null, 2));
+
+    res.json(response);
   } catch (error) {
     console.error("❌ Test notification error:", error);
     res.status(500).json({
       success: false,
       error: error.message,
+      stack: error.stack,
     });
   }
 });
-
 // Send promotion notification
 app.post("/api/send-promotion", async (req, res) => {
   try {
@@ -4398,23 +4451,139 @@ app.post("/api/send-announcement", async (req, res) => {
 
 // Test notification endpoint
 
-app.get("/api/health", (req, res) => {
-  res.json({
+// app.get("/api/health", (req, res) => {
+//   res.json({
+//     status: "OK",
+//     timestamp: new Date().toISOString(),
+//     services: {
+//       stripe: !!process.env.STRIPE_SECRET_KEY,
+//       tookan: !!process.env.TOOKAN_API_KEY,
+//       googleMaps: !!process.env.GOOGLE_MAPS_API_KEY,
+//       mapbox: !!process.env.MAPBOX_ACCESS_TOKEN,
+//     },
+//     api_endpoints: {
+//       distance_matrix: !!process.env.GOOGLE_MAPS_API_KEY,
+//       geocoding: !!process.env.GOOGLE_MAPS_API_KEY,
+//       tookan_fare: !!process.env.TOOKAN_API_KEY,
+//     },
+//   });
+// });
+app.get("/api/test/firestore", async (req, res) => {
+  try {
+    const testDoc = {
+      message: "Test connection",
+      timestamp: admin.firestore.FieldValue.serverTimestamp(),
+      environment: process.env.FIREBASE_SERVICE_ACCOUNT ? "Vercel" : "Local",
+    };
+
+    // Try to write
+    const docRef = await db.collection("test-connection").add(testDoc);
+    console.log("✅ Write successful:", docRef.id);
+
+    // Try to read back
+    const doc = await docRef.get();
+    const data = doc.data();
+    console.log("✅ Read successful:", data);
+
+    // Clean up
+    await docRef.delete();
+    console.log("✅ Cleanup successful");
+
+    res.json({
+      success: true,
+      message: "Firestore connection successful",
+      operations: {
+        write: "✅ Success",
+        read: "✅ Success",
+        delete: "✅ Success",
+      },
+      data: {
+        ...data,
+        timestamp: data.timestamp?.toDate().toISOString(),
+      },
+    });
+  } catch (error) {
+    console.error("❌ Firestore test failed:", error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      code: error.code,
+      hint: error.message.includes("UNAUTHENTICATED")
+        ? "Check FIREBASE_SERVICE_ACCOUNT environment variable"
+        : "Check Firebase configuration",
+    });
+  }
+});
+
+app.get("/api/health", async (req, res) => {
+  const health = {
     status: "OK",
     timestamp: new Date().toISOString(),
+    environment: process.env.FIREBASE_SERVICE_ACCOUNT ? "Vercel" : "Local",
     services: {
-      stripe: !!process.env.STRIPE_SECRET_KEY,
-      tookan: !!process.env.TOOKAN_API_KEY,
-      googleMaps: !!process.env.GOOGLE_MAPS_API_KEY,
-      mapbox: !!process.env.MAPBOX_ACCESS_TOKEN,
+      oneSignal: {
+        configured: !!(
+          process.env.ONESIGNAL_APP_ID && process.env.ONESIGNAL_REST_API_KEY
+        ),
+        appId: process.env.ONESIGNAL_APP_ID || "NOT_SET",
+        hasApiKey: !!process.env.ONESIGNAL_REST_API_KEY,
+      },
+      firebase: {
+        configured: false,
+        status: "Unknown",
+        projectId: null,
+      },
+      stripe: {
+        configured: !!process.env.STRIPE_SECRET_KEY,
+        mode: process.env.STRIPE_SECRET_KEY?.startsWith("sk_test_")
+          ? "Test"
+          : "Live",
+      },
+      tookan: {
+        configured: !!process.env.TOOKAN_API_KEY,
+      },
+      mapbox: {
+        configured: !!process.env.MAPBOX_ACCESS_TOKEN,
+      },
     },
-    api_endpoints: {
-      distance_matrix: !!process.env.GOOGLE_MAPS_API_KEY,
-      geocoding: !!process.env.GOOGLE_MAPS_API_KEY,
-      tookan_fare: !!process.env.TOOKAN_API_KEY,
-    },
-  });
+  };
+
+  // Test Firebase connection
+  try {
+    // Try to write to Firestore
+    const testRef = db.collection("health-check").doc("test");
+    await testRef.set({
+      timestamp: admin.firestore.FieldValue.serverTimestamp(),
+      environment: health.environment,
+    });
+
+    // Try to read back
+    const doc = await testRef.get();
+
+    if (doc.exists) {
+      health.services.firebase.configured = true;
+      health.services.firebase.status = "Connected ✅";
+      health.services.firebase.projectId = admin.app().options.projectId;
+    } else {
+      health.services.firebase.status = "Write successful but read failed ⚠️";
+      health.status = "DEGRADED";
+    }
+  } catch (error) {
+    health.services.firebase.status = `Error: ${error.message}`;
+    health.services.firebase.error = error.code || error.message;
+    health.status = "DEGRADED";
+
+    // Check if it's an authentication error
+    if (error.message.includes("UNAUTHENTICATED")) {
+      health.services.firebase.hint =
+        "Firebase credentials may be incorrect or missing";
+    }
+  }
+
+  const statusCode = health.status === "OK" ? 200 : 503;
+  res.status(statusCode).json(health);
 });
+/////////////////
 
 app.post("/api/tookan/delivery-cost", async (req, res) => {
   const { pickup_postcode, delivery_postcode, weight_range } = req.body || {};
