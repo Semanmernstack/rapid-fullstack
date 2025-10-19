@@ -3692,74 +3692,72 @@ import {
 import { registerUserToken, sendPushNotification } from "./expoPushService.js";
 
 dotenv.config();
-try {
-  let serviceAccount;
+// try {
+//   let serviceAccount;
 
-  // Check if running on Vercel
-  if (process.env.FIREBASE_SERVICE_ACCOUNT) {
-    console.log("🔧 Running on Vercel - using environment variable");
-    serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+//   // Check if running on Vercel
+//   if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+//     console.log("🔧 Running on Vercel - using environment variable");
+//     serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
 
-    // FIX: Handle escaped newlines in private key
-    if (
-      serviceAccount.private_key &&
-      serviceAccount.private_key.includes("\\n")
-    ) {
-      console.log("🔧 Fixing escaped newlines in private key...");
-      serviceAccount.private_key = serviceAccount.private_key.replace(
-        /\\n/g,
-        "\n"
-      );
-      console.log("✅ Private key fixed");
-    }
-  } else {
-    // Local development - read from JSON file
-    console.log("🔧 Running locally - using JSON file");
-    serviceAccount = JSON.parse(
-      readFileSync(
-        "./rapid-delivery-app-1d838-firebase-adminsdk-fbsvc-eb14176c94.json",
-        "utf8"
-      )
-    );
-  }
+//     // FIX: Handle escaped newlines in private key
+//     if (
+//       serviceAccount.private_key &&
+//       serviceAccount.private_key.includes("\\n")
+//     ) {
+//       console.log("🔧 Fixing escaped newlines in private key...");
+//       serviceAccount.private_key = serviceAccount.private_key.replace(
+//         /\\n/g,
+//         "\n"
+//       );
+//       console.log("✅ Private key fixed");
+//     }
+//   } else {
+//     // Local development - read from JSON file
+//     console.log("🔧 Running locally - using JSON file");
+//     serviceAccount = JSON.parse(
+//       readFileSync(
+//         "./rapid-delivery-app-1d838-firebase-adminsdk-fbsvc-eb14176c94.json",
+//         "utf8"
+//       )
+//     );
+//   }
 
-  if (!admin.apps.length) {
-    admin.initializeApp({
-      credential: admin.credential.cert(serviceAccount),
-    });
-    console.log("✅ Firebase initialized successfully");
-  }
-} catch (error) {
-  console.error("❌ Firebase initialization failed:", error.message);
-  process.exit(1);
-}
-let serviceAccount;
+//   if (!admin.apps.length) {
+//     admin.initializeApp({
+//       credential: admin.credential.cert(serviceAccount),
+//     });
+//     console.log("✅ Firebase initialized successfully");
+//   }
+// } catch (error) {
+//   console.error("❌ Firebase initialization failed:", error.message);
+//   process.exit(1);
+// }
+// let serviceAccount;
 
-try {
-  // ✅ Read from local JSON file (no .env needed)
-  serviceAccount = JSON.parse(
-    readFileSync(
-      "./rapid-delivery-app-1d838-firebase-adminsdk-fbsvc-eb14176c94.json",
-      "utf8"
-    )
-  );
+// try {
+//   // ✅ Read from local JSON file (no .env needed)
+//   serviceAccount = JSON.parse(
+//     readFileSync(
+//       "./rapid-delivery-app-1d838-firebase-adminsdk-fbsvc-eb14176c94.json",
+//       "utf8"
+//     )
+//   );
 
-  if (!admin.apps.length) {
-    admin.initializeApp({
-      credential: admin.credential.cert(serviceAccount),
-    });
-    console.log("✅ Firebase initialized successfully");
-  }
-} catch (error) {
-  console.error("❌ Firebase initialization failed:", error.message);
-  process.exit(1);
-}
+//   if (!admin.apps.length) {
+//     admin.initializeApp({
+//       credential: admin.credential.cert(serviceAccount),
+//     });
+//     console.log("✅ Firebase initialized successfully");
+//   }
+// } catch (error) {
+//   console.error("❌ Firebase initialization failed:", error.message);
+//   process.exit(1);
+// }
 // ---------- Configuration ----------
 const app = express();
 const port = 3000;
-const db = admin.firestore();
-const auth = admin.auth();
-const messaging = admin.messaging();
+
 const stripeSecret = process.env.STRIPE_SECRET_KEY;
 const stripe = Stripe(stripeSecret);
 
@@ -4036,8 +4034,6 @@ app.get("/", (req, res) => {
     endpoints: {
       health: "/api/health",
       test_notification: "POST /api/test-notification",
-      test_firestore: "/api/test/firestore",
-      test_onesignal: "POST /api/test/onesignal",
     },
   });
 });
@@ -4097,648 +4093,6 @@ app.post("/api/register-expo-token", async (req, res) => {
 // Test notification endpoint
 
 // Send shipment update notification
-app.post("/api/shipment-update", async (req, res) => {
-  try {
-    const { userId, userName, itemName, quantity, shipmentId } = req.body;
-
-    if (!userId) {
-      return res.status(400).json({
-        success: false,
-        error: "userId is required",
-      });
-    }
-
-    const title = "📦 Shipment Update";
-    const message = `Hi ${userName}! Your ${itemName} (${quantity}) is on its way!`;
-
-    // 1. Send push notification via OneSignal
-    const pushResult = await sendNotificationByExternalId(
-      userId,
-      title,
-      message,
-      {
-        shipmentId,
-        type: "shipment_update",
-        screen: "TrackShipment",
-      }
-    );
-
-    // 2. Save to Firestore for in-app notification list
-    const firestoreResult = await saveNotificationToFirestore(userId, {
-      title,
-      message,
-      type: "shipment_update",
-      shipmentId,
-      icon: "🚚",
-      data: {
-        shipmentId,
-        itemName,
-        quantity,
-      },
-    });
-
-    console.log("✅ Shipment notification sent and saved");
-
-    res.json({
-      success: true,
-      push: pushResult,
-      firestore: firestoreResult,
-    });
-  } catch (error) {
-    console.error("❌ Error sending shipment notification:", error);
-    res.status(500).json({
-      success: false,
-      error: error.message,
-    });
-  }
-});
-
-// Send delivery completed notification
-app.post("/api/delivery-completed", async (req, res) => {
-  try {
-    const { userId, userName, shipmentId, itemName } = req.body;
-
-    if (!userId) {
-      return res.status(400).json({
-        success: false,
-        error: "userId is required",
-      });
-    }
-
-    const title = "✅ Delivery Completed!";
-    const message = `Great news ${userName}! Your ${
-      itemName || "package"
-    } has been delivered successfully.`;
-
-    // 1. Send push notification
-    const pushResult = await sendNotificationByExternalId(
-      userId,
-      title,
-      message,
-      {
-        shipmentId,
-        type: "delivery_completed",
-        screen: "Home",
-      }
-    );
-
-    // 2. Save to Firestore
-    const firestoreResult = await saveNotificationToFirestore(userId, {
-      title,
-      message,
-      type: "delivery_completed",
-      shipmentId,
-      icon: "✅",
-      data: {
-        shipmentId,
-        itemName,
-      },
-    });
-
-    console.log("✅ Delivery notification sent and saved");
-
-    res.json({
-      success: true,
-      push: pushResult,
-      firestore: firestoreResult,
-    });
-  } catch (error) {
-    console.error("❌ Error sending delivery notification:", error);
-    res.status(500).json({
-      success: false,
-      error: error.message,
-    });
-  }
-});
-
-// Send payment success notification
-app.post("/api/payment-success-notification", async (req, res) => {
-  try {
-    const { userId, userName, amount, shipmentId } = req.body;
-
-    if (!userId) {
-      return res.status(400).json({
-        success: false,
-        error: "userId is required",
-      });
-    }
-
-    const title = "💳 Payment Successful";
-    const message = `Hi ${userName}! Your payment of ${amount} has been processed successfully.`;
-
-    // Send push notification
-    const pushResult = await sendNotificationByExternalId(
-      userId,
-      title,
-      message,
-      {
-        shipmentId,
-        type: "payment_success",
-        screen: "Home",
-      }
-    );
-
-    // Save to Firestore
-    const firestoreResult = await saveNotificationToFirestore(userId, {
-      title,
-      message,
-      type: "payment_success",
-      shipmentId,
-      icon: "💳",
-      data: {
-        shipmentId,
-        amount,
-      },
-    });
-
-    console.log("✅ Payment notification sent and saved");
-
-    res.json({
-      success: true,
-      push: pushResult,
-      firestore: firestoreResult,
-    });
-  } catch (error) {
-    console.error("❌ Error sending payment notification:", error);
-    res.status(500).json({
-      success: false,
-      error: error.message,
-    });
-  }
-});
-app.post("/api/test-notification", async (req, res) => {
-  try {
-    const { userId } = req.body;
-
-    if (!userId) {
-      return res.status(400).json({
-        success: false,
-        error: "userId is required",
-      });
-    }
-
-    console.log("🧪 Testing notification system...");
-    console.log(`   User ID: ${userId}`);
-
-    // Check OneSignal credentials
-    if (!process.env.ONESIGNAL_APP_ID || !process.env.ONESIGNAL_REST_API_KEY) {
-      return res.status(500).json({
-        success: false,
-        error: "OneSignal credentials not configured",
-        details: {
-          hasAppId: !!process.env.ONESIGNAL_APP_ID,
-          hasApiKey: !!process.env.ONESIGNAL_REST_API_KEY,
-        },
-      });
-    }
-
-    const title = "🧪 Test Notification";
-    const message = "This is a test notification from your Rapid Delivery App!";
-
-    // Only send push notification via OneSignal
-    console.log("📤 Sending OneSignal push notification...");
-    const pushResult = await sendNotificationByExternalId(
-      userId,
-      title,
-      message,
-      {
-        type: "test",
-        timestamp: Date.now(),
-        // Include data so app can save to Firestore
-        saveToFirestore: true,
-        notificationData: {
-          title,
-          message,
-          type: "test",
-          icon: "🧪",
-        },
-      }
-    );
-
-    console.log("OneSignal Result:", pushResult);
-
-    const response = {
-      success: pushResult.success,
-      timestamp: new Date().toISOString(),
-      userId,
-      checks: {
-        oneSignal: {
-          configured: true,
-          appId: process.env.ONESIGNAL_APP_ID,
-          result: pushResult,
-        },
-      },
-      push: pushResult,
-      message:
-        "Notification sent via OneSignal only. App will save to Firestore.",
-    };
-
-    console.log("✅ Test notification completed");
-    console.log("Response:", JSON.stringify(response, null, 2));
-
-    res.json(response);
-  } catch (error) {
-    console.error("❌ Test notification error:", error);
-    res.status(500).json({
-      success: false,
-      error: error.message,
-      stack: error.stack,
-    });
-  }
-});
-// app.post("/api/test-notification", async (req, res) => {
-//   try {
-//     const { userId } = req.body;
-
-//     if (!userId) {
-//       return res.status(400).json({
-//         success: false,
-//         error: "userId is required",
-//       });
-//     }
-
-//     console.log("🧪 Testing notification system...");
-//     console.log(`   User ID: ${userId}`);
-
-//     // Check OneSignal credentials
-//     if (!process.env.ONESIGNAL_APP_ID || !process.env.ONESIGNAL_REST_API_KEY) {
-//       return res.status(500).json({
-//         success: false,
-//         error: "OneSignal credentials not configured",
-//       });
-//     }
-
-//     const title = "🧪 Test Notification";
-//     const message = "This is a test notification from your Rapid Delivery App!";
-
-//     // Only send push notification via OneSignal
-//     console.log("📤 Sending OneSignal push notification...");
-//     const pushResult = await sendNotificationByExternalId(
-//       userId,
-//       title,
-//       message,
-//       {
-//         type: "test",
-//         timestamp: Date.now(),
-//         // Include data so app can save to Firestore
-//         saveToFirestore: true,
-//         notificationData: {
-//           title,
-//           message,
-//           type: "test",
-//           icon: "🧪",
-//         },
-//       }
-//     );
-
-//     console.log("OneSignal Result:", pushResult);
-
-//     const response = {
-//       success: pushResult.success,
-//       timestamp: new Date().toISOString(),
-//       userId,
-//       checks: {
-//         oneSignal: {
-//           configured: true,
-//           appId: process.env.ONESIGNAL_APP_ID,
-//           result: pushResult,
-//         },
-//       },
-//       push: pushResult,
-//       message: "Notification sent. App will save to Firestore on receive.",
-//     };
-
-//     console.log("✅ Test notification completed");
-
-//     res.json(response);
-//   } catch (error) {
-//     console.error("❌ Test notification error:", error);
-//     res.status(500).json({
-//       success: false,
-//       error: error.message,
-//     });
-//   }
-// });
-// Send promotion notification
-app.post("/api/send-promotion", async (req, res) => {
-  try {
-    const { userId, userName, discount, code } = req.body;
-
-    if (!userId) {
-      return res.status(400).json({
-        success: false,
-        error: "userId is required",
-      });
-    }
-
-    const title = "🎉 Special Offer!";
-    const message = `Hi ${userName}! Get ${discount}% off your next delivery. Use code: ${code}`;
-
-    // Send push notification
-    const pushResult = await sendNotificationByExternalId(
-      userId,
-      title,
-      message,
-      {
-        type: "promotion",
-        screen: "Send",
-      }
-    );
-
-    // Save to Firestore
-    const firestoreResult = await saveNotificationToFirestore(userId, {
-      title,
-      message,
-      type: "promotion",
-      icon: "🎉",
-      data: {
-        discount,
-        code,
-      },
-    });
-
-    console.log("✅ Promotion notification sent and saved");
-
-    res.json({
-      success: true,
-      push: pushResult,
-      firestore: firestoreResult,
-    });
-  } catch (error) {
-    console.error("❌ Error sending promotion notification:", error);
-    res.status(500).json({
-      success: false,
-      error: error.message,
-    });
-  }
-});
-
-// Send global announcement (to all users)
-app.post("/api/send-announcement", async (req, res) => {
-  try {
-    const { title, message, data } = req.body;
-
-    if (!title || !message) {
-      return res.status(400).json({
-        success: false,
-        error: "title and message are required",
-      });
-    }
-
-    // Send push notification to all users via OneSignal
-    const pushResult = await sendGlobalAnnouncement(title, message, data);
-
-    // Get all user IDs from Firestore
-    const usersSnapshot = await db.collection("users").get();
-    const userIds = usersSnapshot.docs.map((doc) => doc.id);
-
-    // Save to Firestore for each user
-    const firestorePromises = userIds.map((userId) =>
-      saveNotificationToFirestore(userId, {
-        title,
-        message,
-        type: "announcement",
-        icon: "📢",
-        data: data || {},
-      })
-    );
-
-    await Promise.all(firestorePromises);
-
-    console.log(`✅ Announcement sent to ${userIds.length} users`);
-
-    res.json({
-      success: true,
-      push: pushResult,
-      userCount: userIds.length,
-    });
-  } catch (error) {
-    console.error("❌ Error sending announcement:", error);
-    res.status(500).json({
-      success: false,
-      error: error.message,
-    });
-  }
-});
-
-// Test notification endpoint
-
-// app.get("/api/health", (req, res) => {
-//   res.json({
-//     status: "OK",
-//     timestamp: new Date().toISOString(),
-//     services: {
-//       stripe: !!process.env.STRIPE_SECRET_KEY,
-//       tookan: !!process.env.TOOKAN_API_KEY,
-//       googleMaps: !!process.env.GOOGLE_MAPS_API_KEY,
-//       mapbox: !!process.env.MAPBOX_ACCESS_TOKEN,
-//     },
-//     api_endpoints: {
-//       distance_matrix: !!process.env.GOOGLE_MAPS_API_KEY,
-//       geocoding: !!process.env.GOOGLE_MAPS_API_KEY,
-//       tookan_fare: !!process.env.TOOKAN_API_KEY,
-//     },
-//   });
-// });
-// Add this endpoint to your server.js to debug Firebase issues
-
-app.get("/api/debug/firebase-status", async (req, res) => {
-  try {
-    const status = {
-      timestamp: new Date().toISOString(),
-      environment: {
-        hasFirebaseEnvVar: !!process.env.FIREBASE_SERVICE_ACCOUNT,
-        envVarLength: process.env.FIREBASE_SERVICE_ACCOUNT?.length || 0,
-        nodeEnv: process.env.NODE_ENV || "development",
-      },
-      firebase: {
-        adminAppsCount: admin.apps.length,
-        adminInitialized: admin.apps.length > 0,
-      },
-    };
-
-    // Try to parse the service account
-    if (process.env.FIREBASE_SERVICE_ACCOUNT) {
-      try {
-        const parsed = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
-        status.serviceAccount = {
-          canParse: true,
-          projectId: parsed.project_id || null,
-          clientEmail: parsed.client_email || null,
-          hasPrivateKey: !!parsed.private_key,
-          privateKeyLength: parsed.private_key?.length || 0,
-          privateKeyStartsWith: parsed.private_key?.substring(0, 30) || null,
-          hasBackslashN: parsed.private_key?.includes("\\n") || false,
-          hasActualNewline: parsed.private_key?.includes("\n") || false,
-        };
-
-        // Try to fix the private key
-        if (parsed.private_key && parsed.private_key.includes("\\n")) {
-          const fixedKey = parsed.private_key.replace(/\\n/g, "\n");
-          status.privateKeyFix = {
-            needed: true,
-            fixedLength: fixedKey.length,
-            fixedStartsWith: fixedKey.substring(0, 30),
-          };
-        }
-      } catch (e) {
-        status.serviceAccount = {
-          canParse: false,
-          error: e.message,
-        };
-      }
-    }
-
-    // Try to test Firestore
-    if (admin.apps.length > 0) {
-      try {
-        status.firebase.projectId = admin.app().options.projectId;
-
-        // Attempt a Firestore operation
-        const testRef = admin.firestore().collection("_debug_test").doc("test");
-        await testRef.set({
-          timestamp: admin.firestore.FieldValue.serverTimestamp(),
-          test: true,
-        });
-
-        const doc = await testRef.get();
-
-        status.firestore = {
-          canWrite: true,
-          canRead: doc.exists,
-          testPassed: doc.exists,
-        };
-
-        // Clean up
-        await testRef.delete();
-      } catch (e) {
-        status.firestore = {
-          canWrite: false,
-          error: e.message,
-          errorCode: e.code,
-        };
-      }
-    } else {
-      status.firestore = {
-        error: "Firebase Admin not initialized",
-      };
-    }
-
-    res.json(status);
-  } catch (error) {
-    res.status(500).json({
-      error: error.message,
-      stack: error.stack,
-    });
-  }
-});
-
-// Also add a simple re-initialization endpoint
-app.post("/api/debug/reinit-firebase", async (req, res) => {
-  try {
-    if (!process.env.FIREBASE_SERVICE_ACCOUNT) {
-      return res.status(400).json({
-        success: false,
-        error: "FIREBASE_SERVICE_ACCOUNT not set",
-      });
-    }
-
-    // Parse and fix the service account
-    const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
-
-    if (serviceAccount.private_key) {
-      serviceAccount.private_key = serviceAccount.private_key.replace(
-        /\\n/g,
-        "\n"
-      );
-    }
-
-    // Try to initialize (will fail if already initialized)
-    let result = {};
-
-    if (admin.apps.length === 0) {
-      admin.initializeApp({
-        credential: admin.credential.cert(serviceAccount),
-      });
-      result.action = "initialized";
-    } else {
-      result.action = "already_initialized";
-      result.projectId = admin.app().options.projectId;
-    }
-
-    // Test Firestore
-    const testRef = admin.firestore().collection("_reinit_test").doc("test");
-    await testRef.set({
-      timestamp: admin.firestore.FieldValue.serverTimestamp(),
-    });
-
-    const doc = await testRef.get();
-    await testRef.delete();
-
-    result.firestoreTest = {
-      success: doc.exists,
-      timestamp: doc.data()?.timestamp?.toDate().toISOString(),
-    };
-
-    res.json({
-      success: true,
-      result,
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      error: error.message,
-      code: error.code,
-      stack: error.stack,
-    });
-  }
-});
-app.get("/api/test/firestore", async (req, res) => {
-  try {
-    const testDoc = {
-      message: "Test connection",
-      timestamp: admin.firestore.FieldValue.serverTimestamp(),
-      environment: process.env.FIREBASE_SERVICE_ACCOUNT ? "Vercel" : "Local",
-    };
-
-    // Try to write
-    const docRef = await db.collection("test-connection").add(testDoc);
-    console.log("✅ Write successful:", docRef.id);
-
-    // Try to read back
-    const doc = await docRef.get();
-    const data = doc.data();
-    console.log("✅ Read successful:", data);
-
-    // Clean up
-    await docRef.delete();
-    console.log("✅ Cleanup successful");
-
-    res.json({
-      success: true,
-      message: "Firestore connection successful",
-      operations: {
-        write: "✅ Success",
-        read: "✅ Success",
-        delete: "✅ Success",
-      },
-      data: {
-        ...data,
-        timestamp: data.timestamp?.toDate().toISOString(),
-      },
-    });
-  } catch (error) {
-    console.error("❌ Firestore test failed:", error);
-    res.status(500).json({
-      success: false,
-      error: error.message,
-      code: error.code,
-      hint: error.message.includes("UNAUTHENTICATED")
-        ? "Check FIREBASE_SERVICE_ACCOUNT environment variable"
-        : "Check Firebase configuration",
-    });
-  }
-});
 
 app.get("/api/health", async (req, res) => {
   const health = {
@@ -4753,11 +4107,7 @@ app.get("/api/health", async (req, res) => {
         appId: process.env.ONESIGNAL_APP_ID || "NOT_SET",
         hasApiKey: !!process.env.ONESIGNAL_REST_API_KEY,
       },
-      firebase: {
-        configured: false,
-        status: "Unknown",
-        projectId: null,
-      },
+
       stripe: {
         configured: !!process.env.STRIPE_SECRET_KEY,
         mode: process.env.STRIPE_SECRET_KEY?.startsWith("sk_test_")
@@ -4772,43 +4122,305 @@ app.get("/api/health", async (req, res) => {
       },
     },
   };
+  res.json(health);
+});
 
-  // Test Firebase connection
+/////////////////
+
+app.post("/api/test-notification", async (req, res) => {
   try {
-    // Try to write to Firestore
-    const testRef = db.collection("health-check").doc("test");
-    await testRef.set({
-      timestamp: admin.firestore.FieldValue.serverTimestamp(),
-      environment: health.environment,
+    const { userId, userName } = req.body;
+
+    if (!userId) {
+      return res.status(400).json({
+        success: false,
+        error: "userId is required",
+      });
+    }
+
+    console.log("🧪 Testing notification for:", userName || userId);
+
+    const title = "🧪 Test Notification";
+    const message = `Hi ${
+      userName || "there"
+    }! This is a test notification from your Rapid Delivery App!`;
+
+    const pushResult = await sendNotificationByExternalId(
+      userId,
+      title,
+      message,
+      {
+        type: "test",
+        timestamp: Date.now(),
+        saveToFirestore: true,
+        notificationData: {
+          title,
+          message,
+          type: "test",
+          icon: "🧪",
+        },
+      }
+    );
+
+    res.json({
+      success: pushResult.success,
+      timestamp: new Date().toISOString(),
+      userId,
+      push: pushResult,
+      message: pushResult.success
+        ? `✅ Notification sent to ${userName || "user"}!`
+        : "❌ Failed to send notification",
+    });
+  } catch (error) {
+    console.error("❌ Test notification error:", error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
+// ---------- SHIPMENT UPDATE ----------
+app.post("/api/shipment-update", async (req, res) => {
+  try {
+    const { userId, userName, itemName, quantity, shipmentId, weight } =
+      req.body;
+
+    if (!userId) {
+      return res.status(400).json({
+        success: false,
+        error: "userId is required",
+      });
+    }
+
+    const title = "📦 Shipment Update";
+    const message = `Hi ${userName || "there"}! Your ${itemName || "package"} ${
+      quantity ? `(${quantity})` : ""
+    } is on its way!`;
+
+    const pushResult = await sendNotificationByExternalId(
+      userId,
+      title,
+      message,
+      {
+        shipmentId,
+        type: "shipment_update",
+        screen: "TrackShipment",
+        saveToFirestore: true,
+        notificationData: {
+          title,
+          message,
+          type: "shipment_update",
+          shipmentId,
+          icon: "🚚",
+          itemName,
+          quantity,
+          weight,
+        },
+      }
+    );
+
+    res.json({
+      success: pushResult.success,
+      push: pushResult,
+    });
+  } catch (error) {
+    console.error("❌ Error sending shipment notification:", error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
+// ---------- DELIVERY COMPLETED ----------
+app.post("/api/delivery-completed", async (req, res) => {
+  try {
+    const { userId, userName, shipmentId, itemName, deliveryAddress } =
+      req.body;
+
+    if (!userId) {
+      return res.status(400).json({
+        success: false,
+        error: "userId is required",
+      });
+    }
+
+    const title = "✅ Delivery Completed!";
+    const message = `Great news ${userName || "there"}! Your ${
+      itemName || "package"
+    } has been delivered successfully!`;
+
+    const pushResult = await sendNotificationByExternalId(
+      userId,
+      title,
+      message,
+      {
+        shipmentId,
+        type: "delivery_completed",
+        screen: "Home",
+        saveToFirestore: true,
+        notificationData: {
+          title,
+          message,
+          type: "delivery_completed",
+          shipmentId,
+          icon: "✅",
+          itemName,
+          deliveryAddress,
+        },
+      }
+    );
+
+    res.json({
+      success: pushResult.success,
+      push: pushResult,
+    });
+  } catch (error) {
+    console.error("❌ Error sending delivery notification:", error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
+// ---------- PAYMENT SUCCESS ----------
+app.post("/api/payment-success-notification", async (req, res) => {
+  try {
+    const { userId, userName, amount, shipmentId, currency } = req.body;
+
+    if (!userId) {
+      return res.status(400).json({
+        success: false,
+        error: "userId is required",
+      });
+    }
+
+    const title = "💳 Payment Successful";
+    const message = `Hi ${userName || "there"}! Your payment of ${
+      currency || "£"
+    }${amount} has been processed successfully.`;
+
+    const pushResult = await sendNotificationByExternalId(
+      userId,
+      title,
+      message,
+      {
+        shipmentId,
+        type: "payment_success",
+        screen: "Home",
+        saveToFirestore: true,
+        notificationData: {
+          title,
+          message,
+          type: "payment_success",
+          shipmentId,
+          icon: "💳",
+          amount,
+          currency,
+        },
+      }
+    );
+
+    res.json({
+      success: pushResult.success,
+      push: pushResult,
+    });
+  } catch (error) {
+    console.error("❌ Error sending payment notification:", error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
+// ---------- PROMOTION ----------
+app.post("/api/send-promotion", async (req, res) => {
+  try {
+    const { userId, userName, discount, code, expiryDate } = req.body;
+
+    if (!userId) {
+      return res.status(400).json({
+        success: false,
+        error: "userId is required",
+      });
+    }
+
+    const title = "🎉 Special Offer!";
+    const message = `Hi ${
+      userName || "there"
+    }! Get ${discount}% off your next delivery. Use code: ${code}`;
+
+    const pushResult = await sendNotificationByExternalId(
+      userId,
+      title,
+      message,
+      {
+        type: "promotion",
+        screen: "Send",
+        saveToFirestore: true,
+        notificationData: {
+          title,
+          message,
+          type: "promotion",
+          icon: "🎉",
+          discount,
+          code,
+          expiryDate,
+        },
+      }
+    );
+
+    res.json({
+      success: pushResult.success,
+      push: pushResult,
+    });
+  } catch (error) {
+    console.error("❌ Error sending promotion notification:", error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
+// ---------- ANNOUNCEMENT ----------
+app.post("/api/send-announcement", async (req, res) => {
+  try {
+    const { title, message, data } = req.body;
+
+    if (!title || !message) {
+      return res.status(400).json({
+        success: false,
+        error: "title and message are required",
+      });
+    }
+
+    const pushResult = await sendGlobalAnnouncement(title, message, {
+      ...data,
+      saveToFirestore: true,
+      notificationData: {
+        title,
+        message,
+        type: "announcement",
+        icon: "📢",
+      },
     });
 
-    // Try to read back
-    const doc = await testRef.get();
-
-    if (doc.exists) {
-      health.services.firebase.configured = true;
-      health.services.firebase.status = "Connected ✅";
-      health.services.firebase.projectId = admin.app().options.projectId;
-    } else {
-      health.services.firebase.status = "Write successful but read failed ⚠️";
-      health.status = "DEGRADED";
-    }
+    res.json({
+      success: pushResult.success,
+      push: pushResult,
+    });
   } catch (error) {
-    health.services.firebase.status = `Error: ${error.message}`;
-    health.services.firebase.error = error.code || error.message;
-    health.status = "DEGRADED";
-
-    // Check if it's an authentication error
-    if (error.message.includes("UNAUTHENTICATED")) {
-      health.services.firebase.hint =
-        "Firebase credentials may be incorrect or missing";
-    }
+    console.error("❌ Error sending announcement:", error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
   }
-
-  const statusCode = health.status === "OK" ? 200 : 503;
-  res.status(statusCode).json(health);
 });
-/////////////////
 
 app.post("/api/tookan/delivery-cost", async (req, res) => {
   const { pickup_postcode, delivery_postcode, weight_range } = req.body || {};
