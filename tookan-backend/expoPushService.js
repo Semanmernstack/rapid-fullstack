@@ -3,9 +3,6 @@ import fetch from "node-fetch";
 // Store user tokens (use database in production)
 const userTokens = new Map();
 
-/**
- * Register user's Expo Push Token
- */
 export function registerUserToken(userId, expoPushToken) {
   userTokens.set(userId, expoPushToken);
   console.log(`✅ Registered Expo Push Token for user ${userId}`);
