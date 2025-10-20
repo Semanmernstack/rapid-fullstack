@@ -549,6 +549,7 @@ import {
   deleteNotification,
 } from "../../utils/notificationFirestore";
 import { doc, getDoc } from "firebase/firestore";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export default function HomeScreen({ navigation }) {
   const [userProfile, setUserProfile] = useState({
@@ -562,7 +563,11 @@ export default function HomeScreen({ navigation }) {
   const [notifications, setNotifications] = useState([]);
   const [showNotifications, setShowNotifications] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [trackingNumber, setTrackingNumber] = useState("");
 
+  const [searchQuery, setSearchQuery] = useState("");
+  const [isSearching, setIsSearching] = useState(false);
+  const backendUrl = "https://rapid-fullstack.vercel.app";
   // Initialize OneSignal
   useEffect(() => {
     initializeOneSignal();
@@ -580,6 +585,68 @@ export default function HomeScreen({ navigation }) {
     });
     return () => unsubscribe();
   }, []);
+  const handleSearchTracking = async () => {
+    if (!searchQuery.trim()) {
+      Alert.alert("Search Error", "Please enter a tracking number");
+      return;
+    }
+
+    setIsSearching(true);
+
+    try {
+      console.log("🔍 Searching for tracking number:", searchQuery);
+
+      const response = await fetch(
+        `${backendUrl}/api/tracking/search?query=${encodeURIComponent(
+          searchQuery.trim()
+        )}`
+      );
+
+      const data = await response.json();
+      console.log("Search response:", data);
+
+      if (response.ok && data.success && data.delivery) {
+        const delivery = data.delivery;
+        console.log("✅ Delivery found:", delivery);
+
+        // Store the delivery data temporarily
+        await AsyncStorage.setItem(
+          `recentDelivery_${delivery.sessionId}`,
+          JSON.stringify({
+            ...delivery,
+            timestamp: Date.now(),
+          })
+        );
+
+        // Navigate to LocationScreen with the found delivery
+        navigation.navigate("Location", {
+          sessionId: delivery.sessionId,
+          paymentStatus: "completed",
+          verifiedPayment: {
+            paymentStatus: "paid",
+            totalAmount: delivery.totalAmount,
+            createdAt: delivery.createdAt,
+            completedAt: delivery.completedAt,
+          },
+          shipmentDetails: delivery.shipmentDetails,
+          fromSearch: true,
+        });
+
+        // Clear search
+        setSearchQuery("");
+      } else {
+        Alert.alert(
+          "Not Found",
+          data.message || "No delivery found with this tracking number"
+        );
+      }
+    } catch (error) {
+      console.error("Search error:", error);
+      Alert.alert("Search Error", error.message || "Failed to search tracking");
+    } finally {
+      setIsSearching(false);
+    }
+  };
 
   // Register user for notifications
   // useEffect(() => {
@@ -926,8 +993,33 @@ export default function HomeScreen({ navigation }) {
           <Text className="text-white text-xl font-semibold mb-4 text-center">
             Track Your Package
           </Text>
-
           <View className="flex-row items-center gap-2">
+            <View className="flex-row items-center bg-white rounded-full px-3 py-2 flex-1">
+              <Search size={24} color="#9CA3AF" />
+              <TextInput
+                placeholder="Enter your tracking number"
+                className="flex-1 ml-3 text-gray-700"
+                placeholderTextColor="#9CA3AF"
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                editable={!isSearching}
+              />
+            </View>
+            <TouchableOpacity
+              className="flex justify-center items-center rounded-full bg-white h-14 w-14"
+              onPress={handleSearchTracking}
+              disabled={isSearching}
+            >
+              {isSearching ? (
+                <ActivityIndicator size="small" color="#8328FA" />
+              ) : (
+                <ScanLine size={30} color="#8328FA" />
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* <View className="flex-row items-center gap-2">
             <View className="flex-row items-center bg-white rounded-full px-3 py-2 flex-1">
               <Search size={24} color="#9CA3AF" />
               <TextInput
@@ -940,7 +1032,7 @@ export default function HomeScreen({ navigation }) {
               <ScanLine size={30} color="#8B5CF6" />
             </TouchableOpacity>
           </View>
-        </View>
+        </View> */}
 
         <View className="flex-1 bg-white rounded-t-3xl px-6 pt-8">
           {/* Discount Banner */}

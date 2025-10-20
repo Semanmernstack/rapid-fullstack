@@ -3693,68 +3693,6 @@ import {
 
 import { registerUserToken, sendPushNotification } from "./expoPushService.js";
 
-// try {
-//   let serviceAccount;
-
-//   // Check if running on Vercel
-//   if (process.env.FIREBASE_SERVICE_ACCOUNT) {
-//     console.log("🔧 Running on Vercel - using environment variable");
-//     serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
-
-//     // FIX: Handle escaped newlines in private key
-//     if (
-//       serviceAccount.private_key &&
-//       serviceAccount.private_key.includes("\\n")
-//     ) {
-//       console.log("🔧 Fixing escaped newlines in private key...");
-//       serviceAccount.private_key = serviceAccount.private_key.replace(
-//         /\\n/g,
-//         "\n"
-//       );
-//       console.log("✅ Private key fixed");
-//     }
-//   } else {
-//     // Local development - read from JSON file
-//     console.log("🔧 Running locally - using JSON file");
-//     serviceAccount = JSON.parse(
-//       readFileSync(
-//         "./rapid-delivery-app-1d838-firebase-adminsdk-fbsvc-eb14176c94.json",
-//         "utf8"
-//       )
-//     );
-//   }
-
-//   if (!admin.apps.length) {
-//     admin.initializeApp({
-//       credential: admin.credential.cert(serviceAccount),
-//     });
-//     console.log("✅ Firebase initialized successfully");
-//   }
-// } catch (error) {
-//   console.error("❌ Firebase initialization failed:", error.message);
-//   process.exit(1);
-// }
-// let serviceAccount;
-
-// try {
-//   // ✅ Read from local JSON file (no .env needed)
-//   serviceAccount = JSON.parse(
-//     readFileSync(
-//       "./rapid-delivery-app-1d838-firebase-adminsdk-fbsvc-eb14176c94.json",
-//       "utf8"
-//     )
-//   );
-
-//   if (!admin.apps.length) {
-//     admin.initializeApp({
-//       credential: admin.credential.cert(serviceAccount),
-//     });
-//     console.log("✅ Firebase initialized successfully");
-//   }
-// } catch (error) {
-//   console.error("❌ Firebase initialization failed:", error.message);
-//   process.exit(1);
-// }
 // ---------- Configuration ----------
 const app = express();
 const port = 3000;
@@ -4038,29 +3976,6 @@ app.get("/", (req, res) => {
     },
   });
 });
-// async function saveNotificationToFirestore(userId, notificationData) {
-//   try {
-//     const notification = {
-//       userId,
-//       title: notificationData.title,
-//       message: notificationData.message,
-//       type: notificationData.type || "general",
-//       data: notificationData.data || {},
-//       read: false,
-//       createdAt: admin.firestore.FieldValue.serverTimestamp(),
-//       shipmentId: notificationData.shipmentId || null,
-//       icon: notificationData.icon || "📦",
-//     };
-
-//     const docRef = await db.collection("notifications").add(notification);
-
-//     console.log("✅ Notification saved to Firestore:", docRef.id);
-//     return { success: true, id: docRef.id };
-//   } catch (error) {
-//     console.error("❌ Error saving notification to Firestore:", error);
-//     return { success: false, error: error.message };
-//   }
-// }
 
 app.post("/api/register-expo-token", async (req, res) => {
   try {
@@ -7585,7 +7500,98 @@ app.get("/api/webhook/tookan/latest/:taskId", (req, res) => {
     });
   }
 });
-app.get("/", (req, res) => res.send("Backend is running on Vercel!"));
+// app.get("/api/tracking/search", async (req, res) => {
+//   const { query } = req.query;
+
+//   if (!query || query.trim().length === 0) {
+//     return res.status(400).json({
+//       success: false,
+//       error: "Tracking number is required",
+//     });
+//   }
+
+//   try {
+//     const searchQuery = query.trim();
+//     console.log("🔍 Searching for tracking number:", searchQuery);
+
+//     // Search in sessionData Map
+//     let foundSession = null;
+//     let foundDelivery = null;
+
+//     // 1. Search in sessionData by sessionId
+//     for (const [sessionId, sessionInfo] of sessionData.entries()) {
+//       if (
+//         sessionId.toLowerCase().includes(searchQuery.toLowerCase()) ||
+//         sessionInfo.deliveryId
+//           ?.toLowerCase()
+//           .includes(searchQuery.toLowerCase()) ||
+//         sessionInfo.tookanTaskId?.toString() === searchQuery
+//       ) {
+//         foundSession = { sessionId, ...sessionInfo };
+//         break;
+//       }
+//     }
+
+//     // 2. Search in deliveries Map by deliveryId or jobId
+//     if (!foundSession) {
+//       for (const [deliveryId, deliveryInfo] of deliveries.entries()) {
+//         if (
+//           deliveryId.toLowerCase().includes(searchQuery.toLowerCase()) ||
+//           deliveryInfo.jobId?.toString() === searchQuery ||
+//           deliveryInfo.sessionId
+//             ?.toLowerCase()
+//             .includes(searchQuery.toLowerCase())
+//         ) {
+//           foundDelivery = deliveryInfo;
+//           break;
+//         }
+//       }
+//     }
+
+//     // 3. Build response from found data
+//     if (foundSession || foundDelivery) {
+//       const result = foundSession || foundDelivery;
+
+//       console.log(
+//         "✅ Tracking number found:",
+//         result.deliveryId || result.sessionId
+//       );
+
+//       return res.json({
+//         success: true,
+//         delivery: {
+//           sessionId: result.sessionId,
+//           deliveryId: result.deliveryId,
+//           tookanTaskId: result.tookanTaskId || result.jobId,
+//           trackingUrl: result.trackingUrl,
+//           status: result.status,
+//           shipmentDetails: result.shipmentDetails,
+//           totalAmount: result.totalAmount,
+//           createdAt: result.createdAt,
+//           completedAt: result.completedAt,
+//           updatedAt: result.updatedAt,
+//         },
+//         message: "Delivery found successfully",
+//       });
+//     }
+
+//     // 4. Not found
+//     console.log("❌ Tracking number not found:", searchQuery);
+//     return res.status(404).json({
+//       success: false,
+//       error: "Delivery not found",
+//       message: "No delivery found with this tracking number",
+//     });
+//   } catch (error) {
+//     console.error("❌ Tracking search error:", error);
+//     return res.status(500).json({
+//       success: false,
+//       error: "Internal server error",
+//       message: error.message,
+//     });
+//   }
+// });
+// app.get("/", (req, res) => res.send("Backend is running on Vercel!"));
 // ---------- Start Server ----------
 // app.listen(port, "0.0.0.0", () => {
 //   console.log(`Server running on ${PUBLIC_BASE_URL}`);

@@ -6400,11 +6400,162 @@ export default function LocationScreen() {
     }
   };
 
+  // useFocusEffect(
+  //   React.useCallback(() => {
+  //     const initializeScreen = async () => {
+  //       console.log("LocationScreen focused with params:", params);
+
+  //       const checkPendingPayment = async () => {
+  //         try {
+  //           const pendingPayment = await AsyncStorage.getItem("pendingPayment");
+  //           if (pendingPayment) {
+  //             const paymentData = JSON.parse(pendingPayment);
+  //             console.log("Found pending payment:", paymentData);
+
+  //             const statusResponse = await fetch(
+  //               `${backendUrl}/api/payment-status/${paymentData.sessionId}`
+  //             );
+
+  //             if (statusResponse.ok) {
+  //               const statusData = await statusResponse.json();
+  //               console.log("Pending payment status:", statusData);
+
+  //               if (statusData.paymentStatus === "paid") {
+  //                 await AsyncStorage.removeItem("pendingPayment");
+
+  //                 const deliveryInfo = {
+  //                   sessionId: paymentData.sessionId,
+  //                   status: "payment_completed",
+  //                   paymentStatus: statusData.paymentStatus,
+  //                   shipmentDetails:
+  //                     statusData.shipmentDetails || paymentData.shipmentDetails,
+  //                   totalAmount:
+  //                     statusData.totalAmount || paymentData.totalAmount,
+  //                   createdAt: statusData.createdAt,
+  //                   completedAt: statusData.completedAt,
+  //                 };
+
+  //                 setDeliveryData(deliveryInfo);
+  //                 await storeDeliveryData(deliveryInfo);
+
+  //                 if (deliveryInfo.shipmentDetails) {
+  //                   createTookanTask(
+  //                     paymentData.sessionId,
+  //                     deliveryInfo.shipmentDetails
+  //                   );
+  //                 }
+  //                 return true;
+  //               }
+  //             }
+  //           }
+  //         } catch (error) {
+  //           console.log("Error checking pending payment:", error);
+  //         }
+  //         return false;
+  //       };
+
+  //       if (sessionId && paymentStatus === "completed") {
+  //         if (shipmentDetails && verifiedPayment) {
+  //           const deliveryInfo = {
+  //             sessionId: sessionId,
+  //             status: "payment_completed",
+  //             paymentStatus: verifiedPayment.paymentStatus,
+  //             shipmentDetails: shipmentDetails,
+  //             totalAmount: verifiedPayment.totalAmount,
+  //             createdAt: verifiedPayment.createdAt,
+  //             completedAt: verifiedPayment.completedAt,
+  //           };
+  //           setDeliveryData(deliveryInfo);
+  //           await storeDeliveryData(deliveryInfo);
+  //           createTookanTask(sessionId, shipmentDetails);
+  //           return;
+  //         } else {
+  //           fetchDeliveryDetails();
+  //           return;
+  //         }
+  //       }
+
+  //       const handledPending = await checkPendingPayment();
+
+  //       if (!handledPending && !hasCheckedForDelivery) {
+  //         setHasCheckedForDelivery(true);
+  //         const recentDelivery = await checkForRecentDelivery();
+
+  //         if (recentDelivery) {
+  //           console.log("Found recent delivery:", recentDelivery);
+  //           setDeliveryData(recentDelivery);
+
+  //           if (
+  //             recentDelivery.shipmentDetails &&
+  //             !recentDelivery.tookanTaskId
+  //           ) {
+  //             try {
+  //               const statusResponse = await fetch(
+  //                 `${backendUrl}/api/payment-status/${recentDelivery.sessionId}`
+  //               );
+
+  //               if (statusResponse.ok) {
+  //                 const statusData = await statusResponse.json();
+  //                 if (statusData.paymentStatus === "paid") {
+  //                   createTookanTask(
+  //                     recentDelivery.sessionId,
+  //                     recentDelivery.shipmentDetails
+  //                   );
+  //                 } else {
+  //                   console.log("Session exists but payment not confirmed");
+  //                 }
+  //               } else {
+  //                 console.log(
+  //                   "Session not found on backend, skipping Tookan task creation"
+  //                 );
+  //                 setError(
+  //                   "Previous session expired. Please create a new delivery."
+  //                 );
+  //               }
+  //             } catch (error) {
+  //               console.log("Error checking session status:", error);
+  //               setError(
+  //                 "Unable to verify previous session. Please create a new delivery."
+  //               );
+  //             }
+  //           } else if (recentDelivery.tookanTaskId) {
+  //             setTookanTaskId(recentDelivery.tookanTaskId);
+  //             setTrackingUrl(recentDelivery.trackingUrl);
+  //           }
+  //         } else {
+  //           setError(
+  //             "No recent delivery found. Create a new delivery to track."
+  //           );
+  //         }
+  //       }
+  //     };
+
+  //     initializeScreen();
+  //   }, [sessionId, paymentStatus, shipmentDetails, verifiedPayment])
+  // );
   useFocusEffect(
     React.useCallback(() => {
       const initializeScreen = async () => {
         console.log("LocationScreen focused with params:", params);
 
+        // Handle direct tracking navigation (from search)
+        if (params.fromTracking && params.deliveryData) {
+          console.log("📦 Loading from tracking search:", params.deliveryData);
+
+          setDeliveryData(params.deliveryData);
+
+          if (params.tookanTaskId) {
+            setTookanTaskId(params.tookanTaskId);
+            setTrackingUrl(params.deliveryData.trackingUrl);
+          }
+
+          // Store to AsyncStorage for future quick access
+          await storeDeliveryData(params.deliveryData);
+
+          return; // Exit early
+        }
+
+        // Rest of your existing logic...
         const checkPendingPayment = async () => {
           try {
             const pendingPayment = await AsyncStorage.getItem("pendingPayment");
@@ -6531,7 +6682,7 @@ export default function LocationScreen() {
       };
 
       initializeScreen();
-    }, [sessionId, paymentStatus, shipmentDetails, verifiedPayment])
+    }, [sessionId, paymentStatus, shipmentDetails, verifiedPayment, params])
   );
 
   const fetchDeliveryDetails = async () => {
@@ -7257,7 +7408,9 @@ export default function LocationScreen() {
         bounces={false}
       >
         {/* Live Map Container */}
-        <View style={{  height: screenHeight * 0.8, backgroundColor: "#f5f5f5" }}>
+        <View
+          style={{ height: screenHeight * 0.8, backgroundColor: "#f5f5f5" }}
+        >
           <MapView
             ref={mapRef}
             provider={PROVIDER_GOOGLE}
