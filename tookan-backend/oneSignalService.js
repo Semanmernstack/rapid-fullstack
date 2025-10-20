@@ -264,26 +264,66 @@
 // };
 import fetch from "node-fetch";
 
-const ONESIGNAL_APP_ID = process.env.ONESIGNAL_APP_ID;
-const ONESIGNAL_REST_API_KEY = process.env.ONESIGNAL_REST_API_KEY;
+// ✅ FIX: Don't read env vars immediately - use getter functions instead
+function getOneSignalConfig() {
+  const ONESIGNAL_APP_ID = process.env.ONESIGNAL_APP_ID;
+  const ONESIGNAL_REST_API_KEY = process.env.ONESIGNAL_REST_API_KEY;
+  const isV2Key = ONESIGNAL_REST_API_KEY?.startsWith("os_v2_");
 
-// Detect API version based on key format
-const isV2Key = ONESIGNAL_REST_API_KEY?.startsWith("os_v2_");
+  const API_ENDPOINT = isV2Key
+    ? `https://api.onesignal.com/notifications?app_id=${ONESIGNAL_APP_ID}`
+    : "https://onesignal.com/api/v1/notifications";
 
-// ✅ FIXED: Use correct endpoints for each API version
-const API_ENDPOINT = isV2Key
-  ? `https://api.onesignal.com/notifications?app_id=${ONESIGNAL_APP_ID}`
-  : "https://onesignal.com/api/v1/notifications";
+  return {
+    ONESIGNAL_APP_ID,
+    ONESIGNAL_REST_API_KEY,
+    isV2Key,
+    API_ENDPOINT,
+  };
+}
 
-console.log(`OneSignal API Version: ${isV2Key ? "v2 (new)" : "v1 (legacy)"}`);
-console.log(`API Endpoint: ${API_ENDPOINT}`);
-console.log(`App ID: ${ONESIGNAL_APP_ID}`);
-console.log(
-  `API Key (first 10 chars): ${ONESIGNAL_REST_API_KEY?.substring(0, 10)}...`
-);
+// Run validation and logging only when called (after dotenv loads)
+let configLogged = false;
+function logConfigOnce() {
+  if (configLogged) return;
+  configLogged = true;
 
-// ✅ FIXED: Build headers based on API version
+  const { ONESIGNAL_APP_ID, ONESIGNAL_REST_API_KEY, isV2Key, API_ENDPOINT } =
+    getOneSignalConfig();
+
+  if (!ONESIGNAL_APP_ID || !ONESIGNAL_REST_API_KEY) {
+    console.error("❌ CRITICAL: OneSignal credentials missing!");
+    console.error(
+      "   ONESIGNAL_APP_ID:",
+      ONESIGNAL_APP_ID ? "✅ Set" : "❌ Missing"
+    );
+    console.error(
+      "   ONESIGNAL_REST_API_KEY:",
+      ONESIGNAL_REST_API_KEY ? "✅ Set" : "❌ Missing"
+    );
+    console.error("\n   Please set these in your .env file:");
+    console.error("   ONESIGNAL_APP_ID=your_app_id");
+    console.error("   ONESIGNAL_REST_API_KEY=your_api_key\n");
+  } else {
+    console.log("\n=== OneSignal Configuration ===");
+    console.log(`API Version: ${isV2Key ? "v2 (new)" : "v1 (legacy)"}`);
+    console.log(`API Endpoint: ${API_ENDPOINT}`);
+    console.log(`App ID: ${ONESIGNAL_APP_ID.substring(0, 15)}...`);
+    console.log(`API Key: ${ONESIGNAL_REST_API_KEY.substring(0, 15)}...`);
+    console.log("===============================\n");
+  }
+}
+
 function getHeaders() {
+  const { ONESIGNAL_REST_API_KEY, isV2Key } = getOneSignalConfig();
+
+  if (!ONESIGNAL_REST_API_KEY) {
+    console.error("❌ Cannot create headers: API key is missing");
+    return {
+      "Content-Type": "application/json",
+    };
+  }
+
   if (isV2Key) {
     return {
       "Content-Type": "application/json",
@@ -304,6 +344,7 @@ const userPlayerIds = new Map();
  * Register user's OneSignal Player ID
  */
 export function registerUserPlayerId(userId, playerId) {
+  logConfigOnce();
   userPlayerIds.set(userId, playerId);
   console.log(`✅ Registered OneSignal Player ID for user ${userId}`);
   console.log(`   Total registered users: ${userPlayerIds.size}`);
@@ -329,6 +370,20 @@ export function removeUserPlayerId(userId) {
  * Send push notification to one user via OneSignal REST API
  */
 export async function sendPushNotification(userId, title, message, data = {}) {
+  logConfigOnce();
+  const { ONESIGNAL_APP_ID, ONESIGNAL_REST_API_KEY, API_ENDPOINT } =
+    getOneSignalConfig();
+
+  if (!ONESIGNAL_APP_ID || !ONESIGNAL_REST_API_KEY) {
+    console.error(
+      "❌ Cannot send notification: OneSignal credentials not configured"
+    );
+    return {
+      success: false,
+      error: "OneSignal credentials not configured. Check your .env file.",
+    };
+  }
+
   const playerId = getUserPlayerId(userId);
 
   if (!playerId) {
@@ -395,6 +450,7 @@ export async function sendBulkPushNotifications(
   message,
   data = {}
 ) {
+  logConfigOnce();
   const results = { successful: [], failed: [] };
 
   console.log(`📤 Sending bulk notification to ${userIds.length} users...`);
@@ -430,7 +486,7 @@ export async function sendBulkPushNotifications(
 }
 
 /**
- * ✅ FIXED: Send notification by external user ID
+ * Send notification by external user ID
  */
 export async function sendNotificationByExternalId(
   userId,
@@ -438,6 +494,20 @@ export async function sendNotificationByExternalId(
   message,
   data = {}
 ) {
+  logConfigOnce();
+  const { ONESIGNAL_APP_ID, ONESIGNAL_REST_API_KEY, isV2Key, API_ENDPOINT } =
+    getOneSignalConfig();
+
+  if (!ONESIGNAL_APP_ID || !ONESIGNAL_REST_API_KEY) {
+    console.error(
+      "❌ Cannot send notification: OneSignal credentials not configured"
+    );
+    return {
+      success: false,
+      error: "OneSignal credentials not configured. Check your .env file.",
+    };
+  }
+
   try {
     let notification;
     let endpoint = API_ENDPOINT;
@@ -479,18 +549,16 @@ export async function sendNotificationByExternalId(
         isV2Key ? "v2" : "v1"
       } API...`
     );
-    console.log(`Endpoint: ${endpoint}`);
-    console.log(`Headers:`, JSON.stringify(getHeaders(), null, 2));
+
+    const headers = getHeaders();
 
     const response = await fetch(endpoint, {
       method: "POST",
-      headers: getHeaders(),
+      headers: headers,
       body: JSON.stringify(notification),
     });
 
     const result = await response.json();
-    console.log(`Response status: ${response.status}`);
-    console.log(`Response body:`, JSON.stringify(result, null, 2));
 
     if (response.ok) {
       console.log(`✅ Notification sent to external user ${userId}`);
@@ -513,9 +581,23 @@ export async function sendNotificationByExternalId(
 }
 
 /**
- * ✅ FIXED: Send announcement to all app users
+ * Send announcement to all app users
  */
 export async function sendGlobalAnnouncement(title, message, data = {}) {
+  logConfigOnce();
+  const { ONESIGNAL_APP_ID, ONESIGNAL_REST_API_KEY, isV2Key, API_ENDPOINT } =
+    getOneSignalConfig();
+
+  if (!ONESIGNAL_APP_ID || !ONESIGNAL_REST_API_KEY) {
+    console.error(
+      "❌ Cannot send announcement: OneSignal credentials not configured"
+    );
+    return {
+      success: false,
+      error: "OneSignal credentials not configured. Check your .env file.",
+    };
+  }
+
   try {
     let notification;
     let endpoint = API_ENDPOINT;

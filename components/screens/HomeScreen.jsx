@@ -536,6 +536,7 @@ import { Search, Bell, ScanLine, X, Trash2 } from "lucide-react-native";
 import { subscribeToProfileUpdates } from "../../utils/userProfileUtils";
 import {
   initializeOneSignal,
+  registerForPushNotificationsAsync,
   registerUserForNotifications,
 } from "../../utils/notificationUtils";
 import { auth, firestore } from "../../firebase";
@@ -581,11 +582,25 @@ export default function HomeScreen({ navigation }) {
   }, []);
 
   // Register user for notifications
+  // useEffect(() => {
+  //   const setupUser = async () => {
+  //     const user = auth.currentUser;
+  //     if (user && userProfile.firstName) {
+  //       await registerUserForNotifications(user.uid, {
+  //         firstName: userProfile.firstName,
+  //         email: user.email,
+  //       });
+  //     }
+  //   };
+  //   setupUser();
+  // }, [userProfile]);
+  // Register user for notifications
   useEffect(() => {
     const setupUser = async () => {
       const user = auth.currentUser;
       if (user && userProfile.firstName) {
-        await registerUserForNotifications(user.uid, {
+        await registerForPushNotificationsAsync(user.uid, {
+          // ✅ NEW
           firstName: userProfile.firstName,
           email: user.email,
         });

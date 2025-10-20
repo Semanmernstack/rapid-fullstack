@@ -3683,6 +3683,8 @@ import fetch from "node-fetch";
 import dotenv from "dotenv";
 import Stripe from "stripe";
 import { readFileSync } from "fs";
+
+dotenv.config();
 import admin from "firebase-admin";
 import {
   sendNotificationByExternalId,
@@ -3691,7 +3693,6 @@ import {
 
 import { registerUserToken, sendPushNotification } from "./expoPushService.js";
 
-dotenv.config();
 // try {
 //   let serviceAccount;
 
