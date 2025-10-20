@@ -1356,36 +1356,60 @@ export default function App() {
   const backendUrl = "https://rapid-fullstack.onrender.com";
 
   // ✅ STEP 1: Initialize OneSignal ONCE when app starts (BEFORE Firebase)
+  // ✅ STEP 1: Initialize OneSignal ONCE when app starts (BEFORE Firebase)
   useEffect(() => {
     console.log("🚀 App starting, initializing OneSignal...");
 
-    try {
-      const initialized = initializeOneSignal();
+    // Initialize OneSignal first
+    const initialized = initializeOneSignal();
 
-      if (initialized) {
-        console.log("✅ OneSignal initialized successfully");
-      } else {
-        console.log(
-          "⚠️ OneSignal initialization returned false - check app.json configuration"
-        );
-      }
-
-      // Setup notification listeners
-      const cleanup = setupNotificationListeners(
-        (notification) => {
-          console.log("📩 Notification received in foreground:", notification);
-        },
-        (response) => {
-          console.log("👆 Notification tapped by user:", response);
-        }
+    if (initialized) {
+      console.log("✅ OneSignal initialized successfully");
+    } else {
+      console.log(
+        "⚠️ OneSignal initialization returned false - check app.json configuration"
       );
-
-      return cleanup;
-    } catch (error) {
-      console.error("❌ Error during OneSignal setup:", error);
-      return () => {};
     }
+
+    // Setup notification listeners with cleanup
+    const cleanup = setupNotificationListeners(
+      (notification) => {
+        console.log("📩 Notification received in foreground:", notification);
+      },
+      (response) => {
+        console.log("👆 Notification tapped by user:", response);
+      }
+    );
+
+    // Return the cleanup function (not the initialization result)
+    return cleanup;
   }, []);
+  // useEffect(() => {
+  //   (async () => {
+  //     console.log("🚀 App starting, initializing OneSignal...");
+  //     const initialized = await initializeOneSignal();
+
+  //     if (initialized) {
+  //       console.log("✅ OneSignal initialized successfully");
+  //       await registerForPushNotificationsAsync();
+  //     } else {
+  //       console.log(
+  //         "⚠️ OneSignal initialization returned false - check app.json"
+  //       );
+  //     }
+
+  //     const cleanup = setupNotificationListeners(
+  //       (notification) => {
+  //         console.log("📩 Notification received in foreground:", notification);
+  //       },
+  //       (response) => {
+  //         console.log("👆 Notification tapped by user:", response);
+  //       }
+  //     );
+
+  //     return cleanup;
+  //   })();
+  // }, []);
 
   // Handle deep linking for payment success
   useEffect(() => {

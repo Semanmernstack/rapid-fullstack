@@ -393,10 +393,279 @@
 //   }
 // }
 
+// import { OneSignal } from "react-native-onesignal";
+// import Constants from "expo-constants";
+
+// let isInitialized = false;
+
+// /**
+//  * Initialize OneSignal
+//  * Call this ONCE when app starts
+//  */
+// export function initializeOneSignal() {
+//   try {
+//     if (isInitialized) {
+//       console.log("⚠️ OneSignal already initialized");
+//       return true;
+//     }
+
+//     console.log("📱 Initializing OneSignal...");
+
+//     // Get OneSignal App ID from app.json
+//     const oneSignalAppId = Constants.expoConfig?.extra?.oneSignalAppId;
+
+//     if (!oneSignalAppId) {
+//       console.error("❌ OneSignal App ID not found in app.json extra");
+//       console.error(
+//         'Make sure app.json has: "extra": { "oneSignalAppId": "YOUR_APP_ID" }'
+//       );
+//       return false;
+//     }
+
+//     console.log("✅ Found OneSignal App ID:", oneSignalAppId);
+
+//     // Initialize OneSignal
+//     OneSignal.initialize(oneSignalAppId);
+
+//     // Request notification permission
+//     OneSignal.Notifications.requestPermission(true);
+
+//     // Set up notification handlers
+//     console.log("📡 Setting up notification listeners...");
+
+//     // Handle notifications received while app is open
+//     OneSignal.Notifications.addEventListener(
+//       "foregroundWillDisplay",
+//       (event) => {
+//         console.log("📬 Notification received in foreground:", event);
+//         // Display the notification
+//         event.getNotification().display();
+//       }
+//     );
+
+//     // Handle notification clicks
+//     OneSignal.Notifications.addEventListener("click", (event) => {
+//       console.log("📂 Notification clicked:", event);
+//       const notification = event.notification;
+//       console.log("Notification data:", notification.additionalData);
+//       // Handle navigation based on notification data here
+//     });
+
+//     isInitialized = true;
+//     console.log("✅ OneSignal initialized successfully");
+//     console.log("✅ Notification listeners set up successfully");
+//     return true;
+//   } catch (error) {
+//     console.error("❌ OneSignal initialization error:", error);
+//     console.error("Stack:", error.stack);
+//     return false;
+//   }
+// }
+
+// /**
+//  * Register user for push notifications with external user ID
+//  * This is CRITICAL for backend to send targeted notifications
+//  */
+// export async function registerForPushNotificationsAsync(userId, userData = {}) {
+//   try {
+//     if (!isInitialized) {
+//       console.warn("⚠️ OneSignal not initialized yet, initializing now...");
+//       initializeOneSignal();
+//     }
+
+//     console.log(`📱 Registering user ${userId} for push notifications.`);
+
+//     // STEP 1: Login user with external ID
+//     OneSignal.login(userId);
+//     console.log(`✅ User logged in to OneSignal: ${userId}`);
+
+//     // STEP 2: Set email if available
+//     if (userData.email) {
+//       OneSignal.User.addEmail(userData.email);
+//       console.log(`✅ Email added: ${userData.email}`);
+//     }
+
+//     // STEP 3: Add tags for user segmentation
+//     const tags = {
+//       userId: userId,
+//       userType: "customer",
+//       registeredAt: new Date().toISOString(),
+//     };
+
+//     if (userData.firstName) {
+//       tags.firstName = userData.firstName;
+//     }
+
+//     OneSignal.User.addTags(tags);
+//     console.log(`✅ Tags added:`, tags);
+
+//     // STEP 4: ✅ CRITICAL - Set external_id as alias for v2 API compatibility
+//     OneSignal.User.addAlias("external_id", userId);
+//     console.log(`✅ External ID alias set: external_id = ${userId}`);
+
+//     // Get OneSignal User ID for debugging (with error handling)
+//     let oneSignalUserId = null;
+//     let pushSubscriptionId = null;
+//     let pushToken = null;
+
+//     try {
+//       oneSignalUserId = OneSignal.User.onesignalId;
+//       console.log(
+//         `✅ OneSignal User ID: ${oneSignalUserId || "Not available yet"}`
+//       );
+//     } catch (e) {
+//       console.log(
+//         "⚠️ OneSignal User ID not available yet (normal on first setup)"
+//       );
+//     }
+
+//     try {
+//       const pushSubscription = OneSignal.User.pushSubscription;
+//       pushSubscriptionId = pushSubscription?.id;
+//       pushToken = pushSubscription?.token;
+//       console.log(
+//         `✅ Push Subscription ID: ${pushSubscriptionId || "Not available yet"}`
+//       );
+//       console.log(
+//         `✅ Push Token: ${
+//           pushToken?.substring(0, 20) || "Not available yet"
+//         }...`
+//       );
+//     } catch (e) {
+//       console.log(
+//         "⚠️ Push subscription not available yet (normal on first setup)"
+//       );
+//     }
+
+//     console.log("✅ Push notifications registered successfully");
+//     console.log("✅ External ID is set - backend can now send notifications!");
+
+//     return {
+//       success: true,
+//       oneSignalUserId,
+//       externalId: userId,
+//       pushSubscriptionId,
+//     };
+//   } catch (error) {
+//     console.error("❌ Error registering for push notifications:", error);
+//     console.error("Stack:", error.stack);
+//     return {
+//       success: false,
+//       error: error.message,
+//     };
+//   }
+// }
+
+// /**
+//  * Alias for backward compatibility
+//  */
+// export function registerUserForNotifications(userId, userData = {}) {
+//   return registerForPushNotificationsAsync(userId, userData);
+// }
+
+// /**
+//  * Logout user from OneSignal
+//  */
+// export function logoutOneSignal() {
+//   try {
+//     OneSignal.logout();
+//     console.log("✅ User logged out from OneSignal");
+//     return true;
+//   } catch (error) {
+//     console.error("❌ Error logging out from OneSignal:", error);
+//     return false;
+//   }
+// }
+
+// /**
+//  * Get current OneSignal user info
+//  */
+// export function getOneSignalUserInfo() {
+//   try {
+//     const userId = OneSignal.User.onesignalId;
+//     const aliases = OneSignal.User.getAliases();
+//     const pushSubscription = OneSignal.User.pushSubscription;
+
+//     return {
+//       oneSignalUserId: userId,
+//       aliases,
+//       pushSubscriptionId: pushSubscription.id,
+//       isSubscribed: pushSubscription.optedIn,
+//     };
+//   } catch (error) {
+//     console.error("❌ Error getting OneSignal user info:", error);
+//     return null;
+//   }
+// }
+
 import { OneSignal } from "react-native-onesignal";
 import Constants from "expo-constants";
 
 let isInitialized = false;
+
+/**
+ * Set up notification event listeners
+ * @param {Function} onForegroundReceived - Optional callback for foreground notifications
+ * @param {Function} onNotificationClicked - Optional callback for notification clicks
+ * @returns {Function} cleanup function to remove listeners
+ */
+export function setupNotificationListeners(
+  onForegroundReceived,
+  onNotificationClicked
+) {
+  try {
+    console.log("📡 Setting up notification listeners...");
+
+    // Handle notifications received while app is open
+    const foregroundListener = OneSignal.Notifications.addEventListener(
+      "foregroundWillDisplay",
+      (event) => {
+        console.log("📬 Notification received in foreground:", event);
+
+        // Call custom callback if provided
+        if (onForegroundReceived) {
+          onForegroundReceived(event);
+        }
+
+        // Display the notification
+        event.getNotification().display();
+      }
+    );
+
+    // Handle notification clicks
+    const clickListener = OneSignal.Notifications.addEventListener(
+      "click",
+      (event) => {
+        console.log("📂 Notification clicked:", event);
+        const notification = event.notification;
+        console.log("Notification data:", notification.additionalData);
+
+        // Call custom callback if provided
+        if (onNotificationClicked) {
+          onNotificationClicked(event);
+        }
+
+        // Handle navigation based on notification data here
+      }
+    );
+
+    console.log("✅ Notification listeners set up successfully");
+
+    // Return cleanup function
+    return () => {
+      try {
+        foregroundListener?.remove?.();
+        clickListener?.remove?.();
+        console.log("🧹 Notification listeners cleaned up");
+      } catch (error) {
+        console.log("⚠️ Error cleaning up listeners:", error);
+      }
+    };
+  } catch (error) {
+    console.error("❌ Error setting up notification listeners:", error);
+    return () => {}; // Return empty cleanup function on error
+  }
+}
 
 /**
  * Initialize OneSignal
@@ -430,84 +699,13 @@ export function initializeOneSignal() {
     // Request notification permission
     OneSignal.Notifications.requestPermission(true);
 
-    // Set up notification handlers
-    console.log("📡 Setting up notification listeners...");
-
-    // Handle notifications received while app is open
-    OneSignal.Notifications.addEventListener(
-      "foregroundWillDisplay",
-      (event) => {
-        console.log("📬 Notification received in foreground:", event);
-        // Display the notification
-        event.getNotification().display();
-      }
-    );
-
-    // Handle notification clicks
-    OneSignal.Notifications.addEventListener("click", (event) => {
-      console.log("📂 Notification clicked:", event);
-      const notification = event.notification;
-      console.log("Notification data:", notification.additionalData);
-      // Handle navigation based on notification data here
-    });
-
     isInitialized = true;
     console.log("✅ OneSignal initialized successfully");
-    console.log("✅ Notification listeners set up successfully");
     return true;
   } catch (error) {
     console.error("❌ OneSignal initialization error:", error);
     console.error("Stack:", error.stack);
     return false;
-  }
-}
-
-/**
- * Setup notification listeners with callbacks
- * Returns cleanup function
- */
-export function setupNotificationListeners(
-  onForegroundNotification,
-  onNotificationTapped
-) {
-  try {
-    console.log("📡 Setting up notification event listeners...");
-
-    // Handle notifications received while app is open
-    const foregroundListener = OneSignal.Notifications.addEventListener(
-      "foregroundWillDisplay",
-      (event) => {
-        console.log("📬 Foreground notification received:", event);
-        if (onForegroundNotification) {
-          onForegroundNotification(event);
-        }
-        // Display the notification
-        event.getNotification().display();
-      }
-    );
-
-    // Handle notification clicks
-    const clickListener = OneSignal.Notifications.addEventListener(
-      "click",
-      (event) => {
-        console.log("👆 Notification clicked:", event);
-        if (onNotificationTapped) {
-          onNotificationTapped(event);
-        }
-      }
-    );
-
-    console.log("✅ Notification listeners attached");
-
-    // Return cleanup function
-    return () => {
-      console.log("🧹 Cleaning up notification listeners");
-      foregroundListener?.remove();
-      clickListener?.remove();
-    };
-  } catch (error) {
-    console.error("❌ Error setting up notification listeners:", error);
-    return () => {};
   }
 }
 
@@ -631,28 +829,15 @@ export function logoutOneSignal() {
  */
 export function getOneSignalUserInfo() {
   try {
-    let userId = null;
-    let pushSubscriptionId = null;
-    let isSubscribed = false;
-
-    try {
-      userId = OneSignal.User.onesignalId;
-    } catch (e) {
-      console.log("⚠️ Could not get OneSignal User ID");
-    }
-
-    try {
-      const pushSubscription = OneSignal.User.pushSubscription;
-      pushSubscriptionId = pushSubscription?.id;
-      isSubscribed = pushSubscription?.optedIn || false;
-    } catch (e) {
-      console.log("⚠️ Could not get push subscription info");
-    }
+    const userId = OneSignal.User.onesignalId;
+    const aliases = OneSignal.User.getAliases();
+    const pushSubscription = OneSignal.User.pushSubscription;
 
     return {
       oneSignalUserId: userId,
-      pushSubscriptionId,
-      isSubscribed,
+      aliases,
+      pushSubscriptionId: pushSubscription.id,
+      isSubscribed: pushSubscription.optedIn,
     };
   } catch (error) {
     console.error("❌ Error getting OneSignal user info:", error);
