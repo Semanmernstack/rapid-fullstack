@@ -1,38 +1,77 @@
-// import axios from "axios";
+// import fetch from "node-fetch";
 
-// // Send push notification to all users via OneSignal
+// // ✅ FIX: Don't read env vars immediately - use getter functions instead
+// function getOneSignalConfig() {
+//   const ONESIGNAL_APP_ID = process.env.ONESIGNAL_APP_ID;
+//   const ONESIGNAL_REST_API_KEY = process.env.ONESIGNAL_REST_API_KEY;
+//   const isV2Key = ONESIGNAL_REST_API_KEY?.startsWith("os_v2_");
 
-// export async function sendGlobalAnnouncement(title, message) {
-//   try {
-//     const response = await axios.post(
-//       "https://onesignal.com/api/v1/notifications",
-//       {
-//         app_id: process.env.ONESIGNAL_APP_ID, // from your OneSignal dashboard
-//         included_segments: ["All"], // sends to everyone
-//         headings: { en: title }, // notification title
-//         contents: { en: message }, // notification message
-//       },
-//       {
-//         headers: {
-//           Authorization: `Basic ${process.env.ONESIGNAL_REST_KEY}`,
-//           "Content-Type": "application/json",
-//         },
-//       }
-//     );
+//   const API_ENDPOINT = isV2Key
+//     ? `https://api.onesignal.com/notifications?app_id=${ONESIGNAL_APP_ID}`
+//     : "https://onesignal.com/api/v1/notifications";
 
-//     console.log("✅ Notification sent:", response.data.id);
-//   } catch (err) {
+//   return {
+//     ONESIGNAL_APP_ID,
+//     ONESIGNAL_REST_API_KEY,
+//     isV2Key,
+//     API_ENDPOINT,
+//   };
+// }
+
+// // Run validation and logging only when called (after dotenv loads)
+// let configLogged = false;
+// function logConfigOnce() {
+//   if (configLogged) return;
+//   configLogged = true;
+
+//   const { ONESIGNAL_APP_ID, ONESIGNAL_REST_API_KEY, isV2Key, API_ENDPOINT } =
+//     getOneSignalConfig();
+
+//   if (!ONESIGNAL_APP_ID || !ONESIGNAL_REST_API_KEY) {
+//     console.error("❌ CRITICAL: OneSignal credentials missing!");
 //     console.error(
-//       "❌ Error sending notification:",
-//       err.response?.data || err.message
+//       "   ONESIGNAL_APP_ID:",
+//       ONESIGNAL_APP_ID ? "✅ Set" : "❌ Missing"
 //     );
+//     console.error(
+//       "   ONESIGNAL_REST_API_KEY:",
+//       ONESIGNAL_REST_API_KEY ? "✅ Set" : "❌ Missing"
+//     );
+//     console.error("\n   Please set these in your .env file:");
+//     console.error("   ONESIGNAL_APP_ID=your_app_id");
+//     console.error("   ONESIGNAL_REST_API_KEY=your_api_key\n");
+//   } else {
+//     console.log("\n=== OneSignal Configuration ===");
+//     console.log(`API Version: ${isV2Key ? "v2 (new)" : "v1 (legacy)"}`);
+//     console.log(`API Endpoint: ${API_ENDPOINT}`);
+//     console.log(`App ID: ${ONESIGNAL_APP_ID.substring(0, 15)}...`);
+//     console.log(`API Key: ${ONESIGNAL_REST_API_KEY.substring(0, 15)}...`);
+//     console.log("===============================\n");
 //   }
 // }
 
-// import fetch from "node-fetch";
+// function getHeaders() {
+//   const { ONESIGNAL_REST_API_KEY, isV2Key } = getOneSignalConfig();
 
-// const ONESIGNAL_APP_ID = process.env.ONESIGNAL_APP_ID;
-// const ONESIGNAL_REST_API_KEY = process.env.ONESIGNAL_REST_API_KEY;
+//   if (!ONESIGNAL_REST_API_KEY) {
+//     console.error("❌ Cannot create headers: API key is missing");
+//     return {
+//       "Content-Type": "application/json",
+//     };
+//   }
+
+//   if (isV2Key) {
+//     return {
+//       "Content-Type": "application/json",
+//       Authorization: `Bearer ${ONESIGNAL_REST_API_KEY}`,
+//     };
+//   } else {
+//     return {
+//       "Content-Type": "application/json; charset=utf-8",
+//       Authorization: `Basic ${ONESIGNAL_REST_API_KEY}`,
+//     };
+//   }
+// }
 
 // // Store user mappings (use database in production)
 // const userPlayerIds = new Map();
@@ -41,6 +80,7 @@
 //  * Register user's OneSignal Player ID
 //  */
 // export function registerUserPlayerId(userId, playerId) {
+//   logConfigOnce();
 //   userPlayerIds.set(userId, playerId);
 //   console.log(`✅ Registered OneSignal Player ID for user ${userId}`);
 //   console.log(`   Total registered users: ${userPlayerIds.size}`);
@@ -66,6 +106,20 @@
 //  * Send push notification to one user via OneSignal REST API
 //  */
 // export async function sendPushNotification(userId, title, message, data = {}) {
+//   logConfigOnce();
+//   const { ONESIGNAL_APP_ID, ONESIGNAL_REST_API_KEY, API_ENDPOINT } =
+//     getOneSignalConfig();
+
+//   if (!ONESIGNAL_APP_ID || !ONESIGNAL_REST_API_KEY) {
+//     console.error(
+//       "❌ Cannot send notification: OneSignal credentials not configured"
+//     );
+//     return {
+//       success: false,
+//       error: "OneSignal credentials not configured. Check your .env file.",
+//     };
+//   }
+
 //   const playerId = getUserPlayerId(userId);
 
 //   if (!playerId) {
@@ -84,7 +138,6 @@
 //         userId,
 //         sentAt: new Date().toISOString(),
 //       },
-//       // Priority settings for immediate delivery
 //       priority: 10,
 //       android_channel_id: "default",
 //       small_icon: "ic_notification",
@@ -93,12 +146,9 @@
 
 //     console.log(`📤 Sending notification to user ${userId}...`);
 
-//     const response = await fetch("https://onesignal.com/api/v1/notifications", {
+//     const response = await fetch(API_ENDPOINT, {
 //       method: "POST",
-//       headers: {
-//         "Content-Type": "application/json",
-//         Authorization: `Basic ${ONESIGNAL_REST_API_KEY}`,
-//       },
+//       headers: getHeaders(),
 //       body: JSON.stringify(notification),
 //     });
 
@@ -106,11 +156,20 @@
 
 //     if (response.ok) {
 //       console.log(`✅ Notification sent successfully to ${userId}`);
-//       console.log(`   Notification ID: ${result.id}`);
-//       return { success: true, notificationId: result.id, userId };
+//       console.log(
+//         `   Notification ID: ${result.id || result.body?.notification_id}`
+//       );
+//       return {
+//         success: true,
+//         notificationId: result.id || result.body?.notification_id,
+//         userId,
+//       };
 //     } else {
 //       console.error(`❌ OneSignal API error:`, result);
-//       return { success: false, error: result.errors || "Unknown error" };
+//       return {
+//         success: false,
+//         error: result.errors || result.error || "Unknown error",
+//       };
 //     }
 //   } catch (error) {
 //     console.error(`❌ Error sending notification to ${userId}:`, error.message);
@@ -127,6 +186,7 @@
 //   message,
 //   data = {}
 // ) {
+//   logConfigOnce();
 //   const results = { successful: [], failed: [] };
 
 //   console.log(`📤 Sending bulk notification to ${userIds.length} users...`);
@@ -162,7 +222,7 @@
 // }
 
 // /**
-//  * Send notification by external user ID (more efficient)
+//  * Send notification by external user ID
 //  */
 // export async function sendNotificationByExternalId(
 //   userId,
@@ -170,39 +230,100 @@
 //   message,
 //   data = {}
 // ) {
-//   try {
-//     const notification = {
-//       app_id: ONESIGNAL_APP_ID,
-//       include_external_user_ids: [userId], // Use your backend user ID directly
-//       headings: { en: title },
-//       contents: { en: message },
-//       data: {
-//         ...data,
-//         userId,
-//         sentAt: new Date().toISOString(),
-//       },
-//       priority: 10,
+//   logConfigOnce();
+//   const { ONESIGNAL_APP_ID, ONESIGNAL_REST_API_KEY, isV2Key, API_ENDPOINT } =
+//     getOneSignalConfig();
+
+//   if (!ONESIGNAL_APP_ID || !ONESIGNAL_REST_API_KEY) {
+//     console.error(
+//       "❌ Cannot send notification: OneSignal credentials not configured"
+//     );
+//     return {
+//       success: false,
+//       error: "OneSignal credentials not configured. Check your .env file.",
 //     };
+//   }
 
-//     console.log(`📤 Sending notification to external user ${userId}...`);
+//   try {
+//     let notification;
+//     let endpoint = API_ENDPOINT;
 
-//     const response = await fetch("https://onesignal.com/api/v1/notifications", {
+//     if (isV2Key) {
+//       // v2 API format with aliases
+//       notification = {
+//         target_channel: "push",
+//         headings: { en: title },
+//         contents: { en: message },
+//         data: {
+//           ...data,
+//           userId,
+//           sentAt: new Date().toISOString(),
+//         },
+//         include_aliases: {
+//           external_id: [userId],
+//         },
+//       };
+//     } else {
+//       // v1 API format
+//       notification = {
+//         app_id: ONESIGNAL_APP_ID,
+//         include_external_user_ids: [userId],
+//         headings: { en: title },
+//         contents: { en: message },
+//         data: {
+//           ...data,
+//           userId,
+//           sentAt: new Date().toISOString(),
+//         },
+//         priority: 10,
+//         android_channel_id: "default",
+//       };
+//     }
+
+//     const headers = getHeaders();
+
+//     // 🔍 ENHANCED DEBUGGING
+//     console.log("\n🔍 === NOTIFICATION REQUEST DEBUG ===");
+//     console.log("Endpoint:", endpoint);
+//     console.log("API Version:", isV2Key ? "v2" : "v1");
+//     console.log("User ID:", userId);
+//     console.log("Headers:", JSON.stringify(headers, null, 2));
+//     console.log("Payload:", JSON.stringify(notification, null, 2));
+//     console.log("=====================================\n");
+
+//     console.log(
+//       `📤 Sending notification to external user ${userId} via ${
+//         isV2Key ? "v2" : "v1"
+//       } API...`
+//     );
+
+//     const response = await fetch(endpoint, {
 //       method: "POST",
-//       headers: {
-//         "Content-Type": "application/json",
-//         Authorization: `Basic ${ONESIGNAL_REST_API_KEY}`,
-//       },
+//       headers: headers,
 //       body: JSON.stringify(notification),
 //     });
 
 //     const result = await response.json();
 
+//     // 🔍 ENHANCED RESPONSE LOGGING
+//     console.log("\n📥 === ONESIGNAL RESPONSE ===");
+//     console.log("Status:", response.status);
+//     console.log("Response:", JSON.stringify(result, null, 2));
+//     console.log("==============================\n");
+
 //     if (response.ok) {
 //       console.log(`✅ Notification sent to external user ${userId}`);
-//       return { success: true, notificationId: result.id };
+//       return {
+//         success: true,
+//         notificationId: result.id || result.body?.notification_id,
+//       };
 //     } else {
 //       console.error(`❌ OneSignal API error:`, result);
-//       return { success: false, error: result.errors };
+//       return {
+//         success: false,
+//         error: result.errors || result.error || "Unknown error",
+//         details: result,
+//       };
 //     }
 //   } catch (error) {
 //     console.error(`❌ Error sending notification:`, error.message);
@@ -214,27 +335,59 @@
 //  * Send announcement to all app users
 //  */
 // export async function sendGlobalAnnouncement(title, message, data = {}) {
-//   try {
-//     const notification = {
-//       app_id: ONESIGNAL_APP_ID,
-//       included_segments: ["All"], // Send to all subscribed users
-//       headings: { en: title },
-//       contents: { en: message },
-//       data: {
-//         ...data,
-//         type: "announcement",
-//         sentAt: new Date().toISOString(),
-//       },
+//   logConfigOnce();
+//   const { ONESIGNAL_APP_ID, ONESIGNAL_REST_API_KEY, isV2Key, API_ENDPOINT } =
+//     getOneSignalConfig();
+
+//   if (!ONESIGNAL_APP_ID || !ONESIGNAL_REST_API_KEY) {
+//     console.error(
+//       "❌ Cannot send announcement: OneSignal credentials not configured"
+//     );
+//     return {
+//       success: false,
+//       error: "OneSignal credentials not configured. Check your .env file.",
 //     };
+//   }
 
-//     console.log(`📢 Sending global announcement...`);
+//   try {
+//     let notification;
+//     let endpoint = API_ENDPOINT;
 
-//     const response = await fetch("https://onesignal.com/api/v1/notifications", {
+//     if (isV2Key) {
+//       // v2 API format
+//       notification = {
+//         target_channel: "push",
+//         headings: { en: title },
+//         contents: { en: message },
+//         data: {
+//           ...data,
+//           type: "announcement",
+//           sentAt: new Date().toISOString(),
+//         },
+//         included_segments: ["All"],
+//       };
+//     } else {
+//       // v1 API format
+//       notification = {
+//         app_id: ONESIGNAL_APP_ID,
+//         included_segments: ["All"],
+//         headings: { en: title },
+//         contents: { en: message },
+//         data: {
+//           ...data,
+//           type: "announcement",
+//           sentAt: new Date().toISOString(),
+//         },
+//       };
+//     }
+
+//     console.log(
+//       `📢 Sending global announcement via ${isV2Key ? "v2" : "v1"} API...`
+//     );
+
+//     const response = await fetch(endpoint, {
 //       method: "POST",
-//       headers: {
-//         "Content-Type": "application/json",
-//         Authorization: `Basic ${ONESIGNAL_REST_API_KEY}`,
-//       },
+//       headers: getHeaders(),
 //       body: JSON.stringify(notification),
 //     });
 
@@ -242,10 +395,16 @@
 
 //     if (response.ok) {
 //       console.log(`✅ Global announcement sent successfully`);
-//       return { success: true, notificationId: result.id };
+//       return {
+//         success: true,
+//         notificationId: result.id || result.body?.notification_id,
+//       };
 //     } else {
 //       console.error(`❌ OneSignal API error:`, result);
-//       return { success: false, error: result.errors };
+//       return {
+//         success: false,
+//         error: result.errors || result.error || "Unknown error",
+//       };
 //     }
 //   } catch (error) {
 //     console.error(`❌ Error sending announcement:`, error.message);
@@ -262,6 +421,7 @@
 //   sendNotificationByExternalId,
 //   sendGlobalAnnouncement,
 // };
+
 import fetch from "node-fetch";
 
 // ✅ FIX: Don't read env vars immediately - use getter functions instead
@@ -270,8 +430,9 @@ function getOneSignalConfig() {
   const ONESIGNAL_REST_API_KEY = process.env.ONESIGNAL_REST_API_KEY;
   const isV2Key = ONESIGNAL_REST_API_KEY?.startsWith("os_v2_");
 
+  // ✅ FIXED: Use correct endpoint format for v2
   const API_ENDPOINT = isV2Key
-    ? `https://api.onesignal.com/notifications?app_id=${ONESIGNAL_APP_ID}`
+    ? "https://api.onesignal.com/notifications" // ✅ No query params in URL
     : "https://onesignal.com/api/v1/notifications";
 
   return {
@@ -314,6 +475,7 @@ function logConfigOnce() {
   }
 }
 
+// ✅ FIXED: Proper headers for both v1 and v2 APIs
 function getHeaders() {
   const { ONESIGNAL_REST_API_KEY, isV2Key } = getOneSignalConfig();
 
@@ -325,11 +487,13 @@ function getHeaders() {
   }
 
   if (isV2Key) {
+    // ✅ v2 API uses Bearer token
     return {
       "Content-Type": "application/json",
       Authorization: `Bearer ${ONESIGNAL_REST_API_KEY}`,
     };
   } else {
+    // v1 API uses Basic auth
     return {
       "Content-Type": "application/json; charset=utf-8",
       Authorization: `Basic ${ONESIGNAL_REST_API_KEY}`,
@@ -486,7 +650,7 @@ export async function sendBulkPushNotifications(
 }
 
 /**
- * Send notification by external user ID
+ * ✅ FIXED: Send notification by external user ID
  */
 export async function sendNotificationByExternalId(
   userId,
@@ -510,11 +674,11 @@ export async function sendNotificationByExternalId(
 
   try {
     let notification;
-    let endpoint = API_ENDPOINT;
 
     if (isV2Key) {
-      // v2 API format with aliases
+      // ✅ v2 API format - simplified and correct
       notification = {
+        app_id: ONESIGNAL_APP_ID, // ✅ Include app_id in body for v2
         target_channel: "push",
         headings: { en: title },
         contents: { en: message },
@@ -544,21 +708,36 @@ export async function sendNotificationByExternalId(
       };
     }
 
+    const headers = getHeaders();
+
+    // 🔍 ENHANCED DEBUGGING
+    console.log("\n🔍 === NOTIFICATION REQUEST DEBUG ===");
+    console.log("Endpoint:", API_ENDPOINT);
+    console.log("API Version:", isV2Key ? "v2" : "v1");
+    console.log("User ID:", userId);
+    console.log("Headers:", JSON.stringify(headers, null, 2));
+    console.log("Payload:", JSON.stringify(notification, null, 2));
+    console.log("=====================================\n");
+
     console.log(
       `📤 Sending notification to external user ${userId} via ${
         isV2Key ? "v2" : "v1"
       } API...`
     );
 
-    const headers = getHeaders();
-
-    const response = await fetch(endpoint, {
+    const response = await fetch(API_ENDPOINT, {
       method: "POST",
       headers: headers,
       body: JSON.stringify(notification),
     });
 
     const result = await response.json();
+
+    // 🔍 ENHANCED RESPONSE LOGGING
+    console.log("\n📥 === ONESIGNAL RESPONSE ===");
+    console.log("Status:", response.status);
+    console.log("Response:", JSON.stringify(result, null, 2));
+    console.log("==============================\n");
 
     if (response.ok) {
       console.log(`✅ Notification sent to external user ${userId}`);
@@ -581,7 +760,7 @@ export async function sendNotificationByExternalId(
 }
 
 /**
- * Send announcement to all app users
+ * ✅ FIXED: Send announcement to all app users
  */
 export async function sendGlobalAnnouncement(title, message, data = {}) {
   logConfigOnce();
@@ -600,11 +779,11 @@ export async function sendGlobalAnnouncement(title, message, data = {}) {
 
   try {
     let notification;
-    let endpoint = API_ENDPOINT;
 
     if (isV2Key) {
-      // v2 API format
+      // ✅ v2 API format
       notification = {
+        app_id: ONESIGNAL_APP_ID, // ✅ Include app_id
         target_channel: "push",
         headings: { en: title },
         contents: { en: message },
@@ -634,7 +813,7 @@ export async function sendGlobalAnnouncement(title, message, data = {}) {
       `📢 Sending global announcement via ${isV2Key ? "v2" : "v1"} API...`
     );
 
-    const response = await fetch(endpoint, {
+    const response = await fetch(API_ENDPOINT, {
       method: "POST",
       headers: getHeaders(),
       body: JSON.stringify(notification),

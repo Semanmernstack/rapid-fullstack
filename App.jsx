@@ -1353,7 +1353,7 @@ export default function App() {
   const [deepLinkHandled, setDeepLinkHandled] = useState(false);
   const navigationRef = useRef();
 
-  const backendUrl = "https://rapid-fullstack.vercel.app";
+  const backendUrl = "https://rapid-fullstack.onrender.com";
 
   // ✅ STEP 1: Initialize OneSignal ONCE when app starts (BEFORE Firebase)
   useEffect(() => {
@@ -1701,7 +1701,7 @@ export default function App() {
           linking={{
             prefixes: [
               "rapiddelivery://",
-              "https://rapid-fullstack.vercel.app",
+              "https://rapid-fullstack.onrender.com",
             ],
             config: {
               screens: {

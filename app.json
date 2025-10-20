@@ -16,7 +16,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.yourcompany.rapiddelivery",
-      "associatedDomains": ["applinks:rapid-fullstack.vercel.app"],
+      "associatedDomains": ["applinks:rapid-fullstack.onrender.com"],
       "config": {
         "googleMapsApiKey": "AIzaSyC_V4seFQ1G-ibCyWfmHCBkJoF0ZmNkPVc"
       },
@@ -66,12 +66,12 @@
           "data": [
             {
               "scheme": "https",
-              "host": "rapid-fullstack.vercel.app",
+              "host": "rapid-fullstack.onrender.com",
               "pathPrefix": "/payment-success"
             },
             {
               "scheme": "https",
-              "host": "rapid-fullstack.vercel.app",
+              "host": "rapid-fullstack.onrender.com",
               "pathPrefix": "/payment-cancel"
             }
           ]
@@ -125,7 +125,7 @@
       "prefixes": [
         "rapiddelivery://",
         "com.yourcompany.rapiddelivery://",
-        "https://rapid-fullstack.vercel.app"
+        "https://rapid-fullstack.onrender.com"
       ]
     },
     "extra": {

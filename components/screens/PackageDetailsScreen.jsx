@@ -91,8 +91,8 @@ export default function PackageDetailsScreen() {
     { label: "Same Day", value: "Same Day" },
   ]);
 
-  //const backendUrl = "http://192.168.43.176:3000";
-  const backendUrl = "https://rapid-fullstack.vercel.app";
+  const backendUrl = "https://rapid-fullstack.onrender.com";
+  //const backendUrl = "https://rapid-fullstack.vercel.app";
 
   // Check for returning from payment
   useEffect(() => {

@@ -3677,15 +3677,15 @@
 //   console.log("  GET  /payment-success - Payment success page");
 //   console.log("  GET  /payment-cancel - Payment cancel page");
 // });
+import dotenv from "dotenv";
 import express from "express";
 import bodyParser from "body-parser";
 import fetch from "node-fetch";
-import dotenv from "dotenv";
+
 import Stripe from "stripe";
-import { readFileSync } from "fs";
 
 dotenv.config();
-import admin from "firebase-admin";
+
 import {
   sendNotificationByExternalId,
   sendGlobalAnnouncement,
@@ -3696,13 +3696,26 @@ import { registerUserToken, sendPushNotification } from "./expoPushService.js";
 // ---------- Configuration ----------
 const app = express();
 const port = 3000;
-
+console.log("\n=== Environment Variables Check ===");
+console.log(
+  "ONESIGNAL_APP_ID:",
+  process.env.ONESIGNAL_APP_ID ? "✅ Loaded" : "❌ MISSING"
+);
+console.log(
+  "ONESIGNAL_REST_API_KEY:",
+  process.env.ONESIGNAL_REST_API_KEY ? "✅ Loaded" : "❌ MISSING"
+);
+console.log(
+  "API Key preview:",
+  process.env.ONESIGNAL_REST_API_KEY?.substring(0, 20) + "..."
+);
+console.log("===================================\n");
 const stripeSecret = process.env.STRIPE_SECRET_KEY;
 const stripe = Stripe(stripeSecret);
 
 // Keep this the same IP your mobile app is using
-//const PUBLIC_BASE_URL = "http://192.168.43.176:3000";
-const PUBLIC_BASE_URL = "https://rapid-fullstack.vercel.app";
+const PUBLIC_BASE_URL = "https://rapid-fullstack.onrender.com";
+//const PUBLIC_BASE_URL = "https://rapid-fullstack.vercel.app";
 
 const webhookDataStore = {};
 
@@ -3944,6 +3957,27 @@ function sanitize(obj, keys = []) {
 
 // ---------- Middleware ----------
 // Raw body for Stripe webhook ONLY
+// ---------- Enhanced Logging Middleware ----------
+app.use((req, res, next) => {
+  const timestamp = new Date().toISOString();
+  console.log(`[${timestamp}] ${req.method} ${req.originalUrl}`, {
+    ip: req.ip,
+    userAgent: req.get("User-Agent"),
+    contentType: req.get("Content-Type"),
+    body: req.body ? JSON.stringify(req.body).substring(0, 200) : "No body",
+  });
+
+  // Capture response to log when it's sent
+  const originalSend = res.send;
+  res.send = function (data) {
+    console.log(
+      `[${timestamp}] ${req.method} ${req.originalUrl} -> ${res.statusCode}`
+    );
+    originalSend.apply(res, arguments);
+  };
+
+  next();
+});
 app.use((req, res, next) => {
   if (req.originalUrl === "/webhook") {
     next();
@@ -4752,10 +4786,10 @@ app.get("/payment-success", async (req, res) => {
               'rapiddelivery://payment-success?session_id=' + sessionId,
               'com.yourcompany.rapiddelivery://payment-success?session_id=' + sessionId,
               // Also try the web URL as a fallback for universal links
-              'https://rapid-fullstack.vercel.app/payment-success?session_id=' + sessionId,
-              'https://rapid-fullstack.vercel.app/payment-success?session_id=' + sessionId 
-              // 'https://192.168.43.176:3000/payment-success?session_id=' + sessionId,
-              // 'http://192.168.43.176:3000/payment-success?session_id=' + sessionId
+              //'https://rapid-fullstack.vercel.app/payment-success?session_id=' + sessionId,
+              //'https://rapid-fullstack.vercel.app/payment-success?session_id=' + sessionId 
+               'https://rapid-fullstack.onrender.com/payment-success?session_id=' + sessionId,
+              'https://rapid-fullstack.onrender.com/payment-success?session_id=' + sessionId
             ];
             
             console.log('Attempt', redirectAttempts, '- Trying to redirect to app with session:', sessionId);
@@ -7500,145 +7534,149 @@ app.get("/api/webhook/tookan/latest/:taskId", (req, res) => {
     });
   }
 });
-// app.get("/api/tracking/search", async (req, res) => {
-//   const { query } = req.query;
+app.get("/api/tracking/search", (req, res) => {
+  // Set JSON content type immediately
+  res.setHeader("Content-Type", "application/json");
 
-//   if (!query || query.trim().length === 0) {
-//     return res.status(400).json({
-//       success: false,
-//       error: "Tracking number is required",
-//     });
-//   }
+  console.log("📥 Received request at /api/tracking/search");
+  console.log("🔹 Query params:", req.query);
 
-//   try {
-//     const searchQuery = query.trim();
-//     console.log("🔍 Searching for tracking number:", searchQuery);
+  try {
+    const { query } = req.query;
 
-//     // Search in sessionData Map
-//     let foundSession = null;
-//     let foundDelivery = null;
+    if (!query || query.trim().length === 0) {
+      console.warn("⚠️ No tracking number provided");
+      return res.status(400).json({
+        success: false,
+        error: "Tracking number is required",
+        message: "Please provide a tracking number",
+      });
+    }
 
-//     // 1. Search in sessionData by sessionId
-//     for (const [sessionId, sessionInfo] of sessionData.entries()) {
-//       if (
-//         sessionId.toLowerCase().includes(searchQuery.toLowerCase()) ||
-//         sessionInfo.deliveryId
-//           ?.toLowerCase()
-//           .includes(searchQuery.toLowerCase()) ||
-//         sessionInfo.tookanTaskId?.toString() === searchQuery
-//       ) {
-//         foundSession = { sessionId, ...sessionInfo };
-//         break;
-//       }
-//     }
+    const searchQuery = query.trim();
+    console.log("🔍 Searching for:", searchQuery);
 
-//     // 2. Search in deliveries Map by deliveryId or jobId
-//     if (!foundSession) {
-//       for (const [deliveryId, deliveryInfo] of deliveries.entries()) {
-//         if (
-//           deliveryId.toLowerCase().includes(searchQuery.toLowerCase()) ||
-//           deliveryInfo.jobId?.toString() === searchQuery ||
-//           deliveryInfo.sessionId
-//             ?.toLowerCase()
-//             .includes(searchQuery.toLowerCase())
-//         ) {
-//           foundDelivery = deliveryInfo;
-//           break;
-//         }
-//       }
-//     }
+    // Check if Maps exist and initialize if needed
+    if (!global.sessionData) {
+      console.warn("⚠️ sessionData Map not initialized");
+      global.sessionData = new Map();
+    }
+    if (!global.deliveries) {
+      console.warn("⚠️ deliveries Map not initialized");
+      global.deliveries = new Map();
+    }
 
-//     // 3. Build response from found data
-//     if (foundSession || foundDelivery) {
-//       const result = foundSession || foundDelivery;
-
-//       console.log(
-//         "✅ Tracking number found:",
-//         result.deliveryId || result.sessionId
-//       );
-
-//       return res.json({
-//         success: true,
-//         delivery: {
-//           sessionId: result.sessionId,
-//           deliveryId: result.deliveryId,
-//           tookanTaskId: result.tookanTaskId || result.jobId,
-//           trackingUrl: result.trackingUrl,
-//           status: result.status,
-//           shipmentDetails: result.shipmentDetails,
-//           totalAmount: result.totalAmount,
-//           createdAt: result.createdAt,
-//           completedAt: result.completedAt,
-//           updatedAt: result.updatedAt,
-//         },
-//         message: "Delivery found successfully",
-//       });
-//     }
-
-//     // 4. Not found
-//     console.log("❌ Tracking number not found:", searchQuery);
-//     return res.status(404).json({
-//       success: false,
-//       error: "Delivery not found",
-//       message: "No delivery found with this tracking number",
-//     });
-//   } catch (error) {
-//     console.error("❌ Tracking search error:", error);
-//     return res.status(500).json({
-//       success: false,
-//       error: "Internal server error",
-//       message: error.message,
-//     });
-//   }
-// });
-// app.get("/", (req, res) => res.send("Backend is running on Vercel!"));
-// ---------- Start Server ----------
-// app.listen(port, "0.0.0.0", () => {
-//   console.log(`Server running on ${PUBLIC_BASE_URL}`);
-//   console.log(
-//     "Remember to expose /webhook to Stripe when testing locally (e.g., via ngrok)."
-//   );
-//   console.log("Available endpoints:");
-//   console.log("  GET  / - Health check");
-//   console.log("  GET  /api/health - Service status");
-//   console.log("  POST /api/tookan/delivery-cost - Calculate delivery cost");
-//   console.log("  POST /api/create-checkout-session - Web checkout (PRIMARY)");
-//   console.log("  GET  /api/session/:id/payment-status - Check payment status");
-//   console.log(
-//     "  GET  /api/session/:id/create-tookan-task - Create/get Tookan task"
-//   );
-//   console.log("  GET  /api/delivery/:id - Get delivery details");
-//   console.log("  POST /webhook - Stripe webhook");
-//   console.log("  POST /api/webhook/tookan - Tookan webhook");
-//   console.log("  GET  /payment-success - Payment success page");
-
-//   console.log("  GET  /payment-cancel - Payment cancel page");
-// });
-
-if (process.env.VERCEL === undefined) {
-  app.listen(port, "0.0.0.0", () => {
-    console.log(`Server running on ${PUBLIC_BASE_URL}`);
     console.log(
-      "Remember to expose /webhook to Stripe when testing locally (e.g., via ngrok)."
+      `📊 Data stores: sessionData=${global.sessionData.size}, deliveries=${global.deliveries.size}`
     );
-    console.log("Available endpoints:");
-    console.log("  GET  / - Health check");
-    console.log("  GET  /api/health - Service status");
-    console.log("  POST /api/tookan/delivery-cost - Calculate delivery cost");
-    console.log("  POST /api/create-checkout-session - Web checkout (PRIMARY)");
-    console.log(
-      "  GET  /api/session/:id/payment-status - Check payment status"
-    );
-    console.log(
-      "  GET  /api/session/:id/create-tookan-task - Create/get Tookan task"
-    );
-    console.log("  GET  /api/delivery/:id - Get delivery details");
-    console.log("  POST /webhook - Stripe webhook");
-    console.log("  POST /api/webhook/tookan - Tookan webhook");
-    console.log("  GET  /payment-success - Payment success page");
 
-    console.log("  GET  /payment-cancel - Payment cancel page");
-  });
-}
+    let foundSession = null;
+    let foundDelivery = null;
+
+    // Search in sessionData
+    for (const [sessionId, sessionInfo] of global.sessionData.entries()) {
+      try {
+        const matches =
+          sessionId.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          sessionInfo.deliveryId
+            ?.toLowerCase()
+            .includes(searchQuery.toLowerCase()) ||
+          sessionInfo.tookanTaskId?.toString() === searchQuery;
+
+        if (matches) {
+          foundSession = { sessionId, ...sessionInfo };
+          console.log("✅ Found in sessionData:", sessionId);
+          break;
+        }
+      } catch (err) {
+        console.error("❌ Error in session check:", err);
+      }
+    }
+
+    // Search in deliveries if not found
+    if (!foundSession) {
+      for (const [deliveryId, deliveryInfo] of global.deliveries.entries()) {
+        try {
+          const matches =
+            deliveryId.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            deliveryInfo.jobId?.toString() === searchQuery ||
+            deliveryInfo.sessionId
+              ?.toLowerCase()
+              .includes(searchQuery.toLowerCase());
+
+          if (matches) {
+            foundDelivery = { deliveryId, ...deliveryInfo };
+            console.log("✅ Found in deliveries:", deliveryId);
+            break;
+          }
+        } catch (err) {
+          console.error("❌ Error in delivery check:", err);
+        }
+      }
+    }
+
+    const result = foundSession || foundDelivery;
+
+    if (result) {
+      console.log("🎯 Returning match");
+      return res.status(200).json({
+        success: true,
+        delivery: {
+          sessionId: result.sessionId || null,
+          deliveryId: result.deliveryId || null,
+          tookanTaskId: result.tookanTaskId || result.jobId || null,
+          trackingUrl: result.trackingUrl || null,
+          status: result.status || "unknown",
+          shipmentDetails: result.shipmentDetails || null,
+          totalAmount: result.totalAmount || null,
+          createdAt: result.createdAt || null,
+          completedAt: result.completedAt || null,
+          updatedAt: result.updatedAt || null,
+        },
+        message: "Delivery found successfully",
+      });
+    }
+
+    console.warn("❌ No match found for:", searchQuery);
+    return res.status(404).json({
+      success: false,
+      error: "Delivery not found",
+      message: "No delivery found with this tracking number",
+    });
+  } catch (error) {
+    console.error("🔥 Critical error:", error);
+    console.error("Stack:", error.stack);
+
+    return res.status(500).json({
+      success: false,
+      error: "Internal server error",
+      message: error.message,
+    });
+  }
+});
+
+app.get("/", (req, res) => res.send("Backend is running on Vercel!"));
+
+app.listen(port, "0.0.0.0", () => {
+  console.log(`Server running on ${PUBLIC_BASE_URL}`);
+  console.log(
+    "Remember to expose /webhook to Stripe when testing locally (e.g., via ngrok)."
+  );
+  console.log("Available endpoints:");
+  console.log("  GET  / - Health check");
+  console.log("  GET  /api/health - Service status");
+  console.log("  POST /api/tookan/delivery-cost - Calculate delivery cost");
+  console.log("  POST /api/create-checkout-session - Web checkout (PRIMARY)");
+  console.log("  GET  /api/session/:id/payment-status - Check payment status");
+  console.log(
+    "  GET  /api/session/:id/create-tookan-task - Create/get Tookan task"
+  );
+  console.log("  GET  /api/delivery/:id - Get delivery details");
+  console.log("  POST /webhook - Stripe webhook");
+  console.log("  POST /api/webhook/tookan - Tookan webhook");
+  console.log("  GET  /payment-success - Payment success page");
+
+  console.log("  GET  /payment-cancel - Payment cancel page");
+});
 
 export default app;

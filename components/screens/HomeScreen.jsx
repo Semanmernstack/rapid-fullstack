@@ -567,7 +567,7 @@ export default function HomeScreen({ navigation }) {
 
   const [searchQuery, setSearchQuery] = useState("");
   const [isSearching, setIsSearching] = useState(false);
-  const backendUrl = "https://rapid-fullstack.vercel.app";
+  const backendUrl = "https://rapid-fullstack.onrender.com";
   // Initialize OneSignal
   useEffect(() => {
     initializeOneSignal();
@@ -595,15 +595,56 @@ export default function HomeScreen({ navigation }) {
 
     try {
       console.log("🔍 Searching for tracking number:", searchQuery);
-
-      const response = await fetch(
+      console.log(
+        "🔗 Request URL:",
         `${backendUrl}/api/tracking/search?query=${encodeURIComponent(
           searchQuery.trim()
         )}`
       );
 
-      const data = await response.json();
-      console.log("Search response:", data);
+      const response = await fetch(
+        `${backendUrl}/api/tracking/search?query=${encodeURIComponent(
+          searchQuery.trim()
+        )}`,
+        {
+          method: "GET",
+          headers: {
+            Accept: "application/json",
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      console.log("📡 Response status:", response.status);
+      console.log("📡 Response headers:", response.headers);
+
+      // Get response text first for debugging
+      const responseText = await response.text();
+      console.log("📄 Response text:", responseText.substring(0, 200));
+
+      // Check if response is actually JSON
+      const contentType = response.headers.get("content-type");
+      if (!contentType || !contentType.includes("application/json")) {
+        console.error("❌ Server returned non-JSON response:", contentType);
+        console.error("Response preview:", responseText.substring(0, 500));
+        Alert.alert(
+          "Server Error",
+          "The server is not responding correctly. Please check if the backend is running at " +
+            backendUrl
+        );
+        return;
+      }
+
+      // Parse the text as JSON
+      let data;
+      try {
+        data = JSON.parse(responseText);
+        console.log("✅ Parsed response:", data);
+      } catch (parseError) {
+        console.error("❌ JSON parse error:", parseError);
+        console.error("Response text:", responseText);
+        throw new Error("Invalid response from server");
+      }
 
       if (response.ok && data.success && data.delivery) {
         const delivery = data.delivery;
@@ -620,16 +661,9 @@ export default function HomeScreen({ navigation }) {
 
         // Navigate to LocationScreen with the found delivery
         navigation.navigate("Location", {
-          sessionId: delivery.sessionId,
-          paymentStatus: "completed",
-          verifiedPayment: {
-            paymentStatus: "paid",
-            totalAmount: delivery.totalAmount,
-            createdAt: delivery.createdAt,
-            completedAt: delivery.completedAt,
-          },
-          shipmentDetails: delivery.shipmentDetails,
-          fromSearch: true,
+          fromTracking: true,
+          deliveryData: delivery,
+          tookanTaskId: delivery.tookanTaskId,
         });
 
         // Clear search
@@ -642,7 +676,12 @@ export default function HomeScreen({ navigation }) {
       }
     } catch (error) {
       console.error("Search error:", error);
-      Alert.alert("Search Error", error.message || "Failed to search tracking");
+      Alert.alert(
+        "Search Error",
+        error.message === "Server error - please try again later"
+          ? error.message
+          : "Failed to search tracking. Please check your connection."
+      );
     } finally {
       setIsSearching(false);
     }
