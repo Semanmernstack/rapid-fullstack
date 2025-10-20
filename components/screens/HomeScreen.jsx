@@ -1122,7 +1122,7 @@ export default function HomeScreen({ navigation }) {
                 const userData = userDoc.exists() ? userDoc.data() : {};
 
                 const response = await fetch(
-                  "https://rapid-fullstack.vercel.app/api/test-notification",
+                  "https://rapid-fullstack.onrender.com/api/test-notification",
                   {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
