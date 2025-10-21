@@ -7655,6 +7655,117 @@ app.get("/api/tracking/search", (req, res) => {
   }
 });
 
+// Add this endpoint to your backend (server.js) to debug OneSignal configuration
+
+app.get("/api/debug-onesignal", (req, res) => {
+  const ONESIGNAL_APP_ID = process.env.ONESIGNAL_APP_ID;
+  const ONESIGNAL_REST_API_KEY = process.env.ONESIGNAL_REST_API_KEY;
+
+  // Check if keys are loaded
+  const hasAppId = !!ONESIGNAL_APP_ID;
+  const hasApiKey = !!ONESIGNAL_REST_API_KEY;
+
+  // Detect key type
+  let keyType = "unknown";
+  if (ONESIGNAL_REST_API_KEY) {
+    if (ONESIGNAL_REST_API_KEY.startsWith("os_v2_app_")) {
+      keyType = "v2 User Auth Key (os_v2_app_)";
+    } else if (ONESIGNAL_REST_API_KEY.startsWith("os_v2_api_")) {
+      keyType = "v2 API Key (os_v2_api_)";
+    } else if (ONESIGNAL_REST_API_KEY.startsWith("Basic ")) {
+      keyType = "v1 REST API Key (Basic)";
+    } else {
+      keyType = "Unknown format";
+    }
+  }
+
+  res.json({
+    status: "OK",
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV || "development",
+    oneSignal: {
+      appId: {
+        exists: hasAppId,
+        preview: ONESIGNAL_APP_ID
+          ? `${ONESIGNAL_APP_ID.substring(0, 8)}...${ONESIGNAL_APP_ID.substring(
+              ONESIGNAL_APP_ID.length - 4
+            )}`
+          : "MISSING",
+        length: ONESIGNAL_APP_ID?.length || 0,
+      },
+      apiKey: {
+        exists: hasApiKey,
+        type: keyType,
+        preview: ONESIGNAL_REST_API_KEY
+          ? `${ONESIGNAL_REST_API_KEY.substring(0, 15)}...`
+          : "MISSING",
+        length: ONESIGNAL_REST_API_KEY?.length || 0,
+        startsWithBearer:
+          ONESIGNAL_REST_API_KEY?.startsWith("Bearer ") || false,
+      },
+      headers: {
+        contentType: "application/json",
+        authorization: hasApiKey
+          ? `Bearer ${ONESIGNAL_REST_API_KEY.substring(0, 15)}...`
+          : "MISSING",
+      },
+    },
+    recommendation:
+      !hasAppId || !hasApiKey
+        ? "❌ OneSignal credentials are missing. Check your .env file."
+        : keyType === "v1 REST API Key (Basic)"
+        ? "⚠️ You're using a v1 API key. Please upgrade to v2 User Auth Key from OneSignal dashboard."
+        : keyType === "Unknown format"
+        ? "❌ API key format is invalid. It should start with 'os_v2_app_' or 'os_v2_api_'"
+        : "✅ Configuration looks good!",
+  });
+});
+
+// Test OneSignal API connection
+app.get("/api/test-onesignal-connection", async (req, res) => {
+  try {
+    const ONESIGNAL_APP_ID = process.env.ONESIGNAL_APP_ID;
+    const ONESIGNAL_REST_API_KEY = process.env.ONESIGNAL_REST_API_KEY;
+
+    if (!ONESIGNAL_APP_ID || !ONESIGNAL_REST_API_KEY) {
+      return res.status(500).json({
+        success: false,
+        error: "OneSignal credentials not configured",
+      });
+    }
+
+    // Try to fetch app info from OneSignal
+    const response = await fetch(
+      `https://api.onesignal.com/apps/${ONESIGNAL_APP_ID}`,
+      {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${ONESIGNAL_REST_API_KEY}`,
+        },
+      }
+    );
+
+    const data = await response.json();
+
+    res.json({
+      success: response.ok,
+      status: response.status,
+      statusText: response.statusText,
+      data: data,
+      message: response.ok
+        ? "✅ Successfully connected to OneSignal API"
+        : "❌ Failed to connect to OneSignal API",
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      stack: error.stack,
+    });
+  }
+});
+
 app.get("/", (req, res) => res.send("Backend is running on Vercel!"));
 
 app.listen(port, "0.0.0.0", () => {
