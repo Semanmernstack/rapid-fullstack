@@ -7766,6 +7766,110 @@ app.get("/api/test-onesignal-connection", async (req, res) => {
   }
 });
 
+// Add this to your server.js file to test the actual OneSignal API
+
+app.get("/api/test-onesignal-api", async (req, res) => {
+  try {
+    const ONESIGNAL_APP_ID = process.env.ONESIGNAL_APP_ID;
+    const ONESIGNAL_REST_API_KEY = process.env.ONESIGNAL_REST_API_KEY;
+
+    console.log("\n🧪 Testing OneSignal API Connection...");
+    console.log("App ID:", ONESIGNAL_APP_ID);
+    console.log("API Key:", `${ONESIGNAL_REST_API_KEY.substring(0, 20)}...`);
+
+    // Test 1: Fetch app info
+    console.log("\n📡 Test 1: Fetching app info...");
+    const appResponse = await fetch(
+      `https://api.onesignal.com/apps/${ONESIGNAL_APP_ID}`,
+      {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${ONESIGNAL_REST_API_KEY}`,
+        },
+      }
+    );
+
+    const appData = await appResponse.json();
+    console.log("App fetch status:", appResponse.status);
+    console.log("App data:", JSON.stringify(appData, null, 2));
+
+    if (!appResponse.ok) {
+      return res.json({
+        success: false,
+        test: "fetch_app_info",
+        status: appResponse.status,
+        error: appData,
+        message:
+          "❌ Failed to fetch app info. API key might be invalid or doesn't have permission for this app.",
+        nextSteps: [
+          "1. Go to OneSignal Dashboard → Settings → Keys & IDs",
+          "2. Generate a NEW User Auth Key",
+          "3. Make sure you're using the key for the CORRECT app",
+          "4. Update ONESIGNAL_REST_API_KEY in Render environment variables",
+        ],
+      });
+    }
+
+    // Test 2: Try to send a test notification
+    console.log("\n📡 Test 2: Sending test notification...");
+    const notificationPayload = {
+      app_id: ONESIGNAL_APP_ID,
+      target_channel: "push",
+      headings: { en: "Test Notification" },
+      contents: { en: "This is a test from the backend" },
+      included_segments: ["All"],
+    };
+
+    const notifResponse = await fetch(
+      "https://api.onesignal.com/notifications",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${ONESIGNAL_REST_API_KEY}`,
+        },
+        body: JSON.stringify(notificationPayload),
+      }
+    );
+
+    const notifData = await notifResponse.json();
+    console.log("Notification status:", notifResponse.status);
+    console.log("Notification response:", JSON.stringify(notifData, null, 2));
+
+    res.json({
+      success: true,
+      tests: {
+        fetchAppInfo: {
+          success: appResponse.ok,
+          status: appResponse.status,
+          appName: appData.name,
+          appId: appData.id,
+        },
+        sendNotification: {
+          success: notifResponse.ok,
+          status: notifResponse.status,
+          response: notifData,
+        },
+      },
+      message:
+        appResponse.ok && notifResponse.ok
+          ? "✅ All tests passed! OneSignal API is working correctly."
+          : "❌ Some tests failed. Check the details above.",
+      recommendation:
+        appResponse.ok && notifResponse.ok
+          ? "Everything looks good! The issue might be with targeting specific users."
+          : "Please regenerate your User Auth Key from OneSignal dashboard.",
+    });
+  } catch (error) {
+    console.error("❌ Test error:", error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      stack: error.stack,
+    });
+  }
+});
 app.get("/", (req, res) => res.send("Backend is running on Vercel!"));
 
 app.listen(port, "0.0.0.0", () => {
