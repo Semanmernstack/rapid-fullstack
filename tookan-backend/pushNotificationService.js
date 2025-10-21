@@ -293,7 +293,7 @@ export async function sendCustomNotification(userId, options) {
     console.log(`✅ Custom notification sent to ${userId}: ${response}`);
     return { success: true, messageId: response };
   } catch (error) {
-    console.error(`❌ Error sending custom notification:`, error.message);
+    console.error(`❌ Error sending`, error.message);
     return { success: false, error: error.message };
   }
 }
