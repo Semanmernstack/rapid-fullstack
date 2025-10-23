@@ -7706,7 +7706,7 @@ app.get("/api/debug-onesignal", (req, res) => {
       headers: {
         contentType: "application/json",
         authorization: hasApiKey
-          ? `Bearer ${ONESIGNAL_REST_API_KEY.substring(0, 15)}...`
+          ? `Key ${ONESIGNAL_REST_API_KEY.substring(0, 15)}...`
           : "MISSING",
       },
     },
@@ -7741,7 +7741,7 @@ app.get("/api/test-onesignal-connection", async (req, res) => {
         method: "GET",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${ONESIGNAL_REST_API_KEY}`,
+          Authorization: `Key ${ONESIGNAL_REST_API_KEY}`,
         },
       }
     );
@@ -7785,7 +7785,7 @@ app.get("/api/test-onesignal-api", async (req, res) => {
         method: "GET",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${ONESIGNAL_REST_API_KEY}`,
+          Authorization: `Key ${ONESIGNAL_REST_API_KEY}`,
         },
       }
     );
@@ -7827,7 +7827,7 @@ app.get("/api/test-onesignal-api", async (req, res) => {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${ONESIGNAL_REST_API_KEY}`,
+          Authorization: `Key ${ONESIGNAL_REST_API_KEY}`,
         },
         body: JSON.stringify(notificationPayload),
       }
