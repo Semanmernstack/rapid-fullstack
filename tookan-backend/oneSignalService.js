@@ -1,6 +1,7 @@
+
 // import fetch from "node-fetch";
 
-// // ✅ Get config with proper v2 detection
+// // ✅ FIXED: Proper config loading with validation
 // function getOneSignalConfig() {
 //   const ONESIGNAL_APP_ID = process.env.ONESIGNAL_APP_ID;
 //   const ONESIGNAL_REST_API_KEY = process.env.ONESIGNAL_REST_API_KEY;
@@ -12,6 +13,16 @@
 
 //   // ✅ v2 API uses /notifications endpoint (no app_id in URL)
 //   const API_ENDPOINT = "https://api.onesignal.com/notifications";
+
+//   // ✅ CRITICAL: Validate that we have the keys
+//   if (!ONESIGNAL_APP_ID || !ONESIGNAL_REST_API_KEY) {
+//     console.error("❌ CRITICAL ERROR: OneSignal credentials missing!");
+//     console.error("ONESIGNAL_APP_ID:", ONESIGNAL_APP_ID ? "✅" : "❌ MISSING");
+//     console.error(
+//       "ONESIGNAL_REST_API_KEY:",
+//       ONESIGNAL_REST_API_KEY ? "✅" : "❌ MISSING"
+//     );
+//   }
 
 //   return {
 //     ONESIGNAL_APP_ID,
@@ -51,20 +62,34 @@
 //   }
 // }
 
-// // ✅ Fixed headers for v2 API
+// // ✅ FIXED: Proper headers with actual API key
 // function getHeaders() {
 //   const { ONESIGNAL_REST_API_KEY } = getOneSignalConfig();
 
 //   if (!ONESIGNAL_REST_API_KEY) {
-//     console.error("❌ Cannot create headers: API key is missing");
-//     return { "Content-Type": "application/json" };
+//     console.error("❌ CRITICAL: Cannot create headers - API key is missing!");
+//     console.error(
+//       "❌ process.env.ONESIGNAL_REST_API_KEY =",
+//       process.env.ONESIGNAL_REST_API_KEY
+//     );
+//     throw new Error("OneSignal REST API Key is not configured");
 //   }
 
-//   // ✅ v2 API ALWAYS uses Bearer token (whether os_v2_app_ or os_v2_api_)
-//   return {
+//   // ✅ CRITICAL FIX: Actually use the API key
+//   const headers = {
 //     "Content-Type": "application/json",
 //     Authorization: `Bearer ${ONESIGNAL_REST_API_KEY}`,
 //   };
+
+//   // Debug log (only first time)
+//   if (!configLogged) {
+//     console.log(
+//       "🔑 Authorization Header:",
+//       `Bearer ${ONESIGNAL_REST_API_KEY.substring(0, 20)}...`
+//     );
+//   }
+
+//   return headers;
 // }
 
 // /**
@@ -113,7 +138,10 @@
 //     console.log("\n🔍 === NOTIFICATION REQUEST ===");
 //     console.log("Endpoint:", API_ENDPOINT);
 //     console.log("User ID:", userId);
-//     console.log("Headers:", JSON.stringify(headers, null, 2));
+//     console.log("Headers:", {
+//       "Content-Type": headers["Content-Type"],
+//       Authorization: `Bearer ${ONESIGNAL_REST_API_KEY.substring(0, 20)}...`,
+//     });
 //     console.log("Payload:", JSON.stringify(notification, null, 2));
 //     console.log("================================\n");
 
@@ -337,7 +365,7 @@ function logConfigOnce() {
   } else {
     console.log("\n=== OneSignal Configuration ===");
     console.log(
-      `API Version: ${isV2Key ? "v2 (User Auth Key)" : "v1 (legacy)"}`
+      `API Version: ${isV2Key ? "v2 (Rich API Key)" : "v1 (legacy)"}`
     );
     console.log(`App ID: ${ONESIGNAL_APP_ID.substring(0, 15)}...`);
     console.log(`API Key Type: ${ONESIGNAL_REST_API_KEY.substring(0, 15)}...`);
@@ -345,7 +373,7 @@ function logConfigOnce() {
   }
 }
 
-// ✅ FIXED: Proper headers with actual API key
+// ✅ CRITICAL FIX: Use "Key" instead of "Bearer" for new rich API keys
 function getHeaders() {
   const { ONESIGNAL_REST_API_KEY } = getOneSignalConfig();
 
@@ -358,17 +386,18 @@ function getHeaders() {
     throw new Error("OneSignal REST API Key is not configured");
   }
 
-  // ✅ CRITICAL FIX: Actually use the API key
+  // ✅ CRITICAL FIX: OneSignal's new rich API keys use "Key" not "Bearer"
   const headers = {
     "Content-Type": "application/json",
-    Authorization: `Bearer ${ONESIGNAL_REST_API_KEY}`,
+    "Accept": "application/json",
+    Authorization: `Key ${ONESIGNAL_REST_API_KEY}`, // ← CHANGED FROM "Bearer" TO "Key"
   };
 
   // Debug log (only first time)
   if (!configLogged) {
     console.log(
       "🔑 Authorization Header:",
-      `Bearer ${ONESIGNAL_REST_API_KEY.substring(0, 20)}...`
+      `Key ${ONESIGNAL_REST_API_KEY.substring(0, 20)}...`
     );
   }
 
@@ -423,7 +452,7 @@ export async function sendNotificationByExternalId(
     console.log("User ID:", userId);
     console.log("Headers:", {
       "Content-Type": headers["Content-Type"],
-      Authorization: `Bearer ${ONESIGNAL_REST_API_KEY.substring(0, 20)}...`,
+      Authorization: `Key ${ONESIGNAL_REST_API_KEY.substring(0, 20)}...`,
     });
     console.log("Payload:", JSON.stringify(notification, null, 2));
     console.log("================================\n");
